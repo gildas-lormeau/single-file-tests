@@ -108,3 +108,45 @@ so it never extracts there.
 They run in Node against the file on disk, never inside the browser. That is the line that
 keeps this suite functional rather than a second implementation of the editor. Helpers
 live in `expect/`.
+
+Name the element an assertion is about. `expect/saved-page.mjs` exposes `elementWithId`
+for this, because searching a whole saved page for something like `data:image` passes as
+soon as *any* image was inlined, including when the element under test was dropped
+entirely. Two tests here passed that way before they were tightened.
+
+Remember that SingleFile compresses its output, so attributes are quoted only when they
+have to be. A pattern written for quoted values will silently match almost nothing.
+
+## Known failures
+
+A test may assert the behaviour SingleFile *should* have and name the defect that stops
+it:
+
+```js
+await test("a title longer than the limit is truncated to the limit", async () => {
+    …
+}, { known: "the ellipsis added after truncation is not counted against filenameMaxLength" });
+```
+
+Failing then reports `KNOWN` and leaves the run green. Passing is a failure, because a
+known failure that starts passing means the defect is fixed and the marker has started
+lying about the code. Use this rather than weakening an assertion to match a bug: the
+weakened version locks the bug in and nothing tells you when it goes away.
+
+## The fixture pages
+
+`fixtures/pages/simple.html` is a stylesheet, an image and a script — enough for a test
+about something else, too easy to grade a save on.
+
+`fixtures/pages/rich.html` is the one to reach for when the subject is fidelity. It
+carries an `@import` a level down, a webfont, a shadow root with an adopted stylesheet, a
+canvas holding pixels no markup describes, a same-origin frame, `srcset` and `<picture>`,
+a background image reached through a CSS custom property, and a lazy image three thousand
+pixels below the fold. Each of those is a thing SingleFile has to do real work to keep.
+
+The server also answers two request shapes that save writing a fixture per case:
+
+- `fixtures.titledURL(title)` serves a page whose `<title>` is exactly that string. The
+  default filename template is built from the title, so this is how `filename.spec.mjs`
+  drives names through the sanitizers.
+- `?csp=<policy>` on any fixture URL serves it under that Content-Security-Policy.
