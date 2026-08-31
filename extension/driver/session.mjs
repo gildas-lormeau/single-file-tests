@@ -10,6 +10,7 @@ import { launchChromium } from "./launch-chromium.mjs";
 import { launchFirefox, SINGLEFILE_UUID } from "./launch-firefox.mjs";
 import { buildRelay } from "../relay/build.mjs";
 import { startBridge } from "../relay/bridge.mjs";
+import { unpackRelease } from "./release-build.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 // the MV2 build is the Firefox one, the MV3 build is the Chromium one
@@ -27,16 +28,31 @@ const OPTIONS_PAGE = "src/ui/pages/options.html";
 // (Chromium), so give the page a viewport tall enough to hold its controls
 const OPTIONS_VIEWPORT = { width: 1200, height: 4000 };
 
-async function openSession(browserName, { headless = true } = {}) {
-	const extensionPath = EXTENSION_PATHS[browserName];
-	const singlefileId = readGeckoId(extensionPath);
-	const downloadDir = mkdtempSync(join(tmpdir(), "sf-fn-dl-"));
-	const bridge = await startBridge();
-	const relayPath = buildRelay(browserName, bridge.url);
-
-	const browser = browserName == "firefox"
-		? await launchFirefox({ singlefileId, downloadDir, headless })
-		: await launchChromium({ downloadDir, headless });
+// `release` tests the zip build-extension.sh produces instead of the working tree; see
+// release-build.mjs for why the two are not the same thing.
+async function openSession(browserName, { headless = true, release = false } = {}) {
+	const releaseBuild = release ? unpackRelease(browserName, REPO_ROOT) : undefined;
+	const extensionPath = releaseBuild ? releaseBuild.path : EXTENSION_PATHS[browserName];
+	let singlefileId, downloadDir, bridge, relayPath, browser;
+	try {
+		singlefileId = readGeckoId(extensionPath);
+		downloadDir = mkdtempSync(join(tmpdir(), "sf-fn-dl-"));
+		bridge = await startBridge();
+		relayPath = buildRelay(browserName, bridge.url);
+		browser = browserName == "firefox"
+			? await launchFirefox({ singlefileId, downloadDir, headless })
+			: await launchChromium({ downloadDir, headless });
+	} catch (error) {
+		// nothing below is reachable yet, so unwind by hand rather than through close()
+		if (bridge) {
+			await bridge.close();
+		}
+		[relayPath, downloadDir].forEach(path => path && rmSync(path, { recursive: true, force: true }));
+		if (releaseBuild) {
+			releaseBuild.dispose();
+		}
+		throw error;
+	}
 	const { session } = browser;
 
 	let singlefileOrigin;
@@ -52,6 +68,10 @@ async function openSession(browserName, { headless = true } = {}) {
 			browserName,
 			session,
 			downloadDir,
+			// what was actually installed, so a run can say which build it graded
+			extensionPath,
+			releaseZip: releaseBuild && releaseBuild.zipPath,
+			releaseStaleness: releaseBuild && releaseBuild.staleness,
 			singlefileId: singlefile.extension,
 			singlefileURL,
 			// level 1: the relay asks SingleFile to do something through its public
@@ -196,6 +216,10 @@ async function openSession(browserName, { headless = true } = {}) {
 		await bridge.close();
 		rmSync(relayPath, { recursive: true, force: true });
 		rmSync(downloadDir, { recursive: true, force: true });
+		// the unpacked release carries the injected Woleet key, so it does not outlive the run
+		if (releaseBuild) {
+			releaseBuild.dispose();
+		}
 	}
 }
 

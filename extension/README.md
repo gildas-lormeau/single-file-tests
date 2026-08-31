@@ -8,11 +8,31 @@ npm run test-extension                       both browsers, every spec
 npm run test-extension-firefox               one browser
 node extension/run.mjs --spec=save-page      one spec
 node extension/run.mjs --headful             watch it happen
+npm run test-release                         the packaged builds, then the format suite
 ```
 
 The extensions under test are the sibling checkouts: `single-file` (MV2, Firefox) and
 `single-file-mv3` (MV3, Chromium). Override with `SF_EXTENSION_FIREFOX` and
 `SF_EXTENSION_CHROMIUM`. Both must be built (`./build.sh`) before running.
+
+## Before a release
+
+`npm run test-release` is the gate. It runs the extension suite against the **packaged**
+build and then the format suite, in that order, because the extension suite is what
+produces the archives the format suite loads.
+
+`--release` unpacks `singlefile-extension-firefox.zip` and
+`singlefile-extension-chromium.zip` into a temp directory and installs that, instead of
+the working tree. The two are not the same thing, which is the whole point: the Edge and
+Chromium packages are built from patched sources, packaging is where the Woleet key is
+injected, and the zip contains only the files `build-extension.sh` lists — a file present
+in the checkout but missing from that list works in every test and is absent from the
+release. Run `./build-extension.sh` in each repo first.
+
+Every run prints which build it graded, and warns when the package is older than the
+sources it was built from. The unpacked copy carries the injected Woleet key; it is
+removed when the session closes, and also on exit, interrupt or a broken pipe, so a run
+you cut short does not leave a key in `/tmp`. Do not copy that directory anywhere.
 
 Chromium needs a `chromedriver` matching the installed Chrome. The runner looks in the
 Selenium and Puppeteer caches and picks the closest major; `SF_CHROMEDRIVER_PATH` and

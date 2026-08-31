@@ -7,6 +7,7 @@
 //   node extension/run.mjs --browser=firefox  one browser
 //   node extension/run.mjs --spec=save-page   one spec
 //   node extension/run.mjs --headful          watch it happen
+//   node extension/run.mjs --release          test the packaged build, not the working tree
 
 import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -37,11 +38,17 @@ async function runBrowser(browserName) {
 	console.log("\n=== " + browserName + " ===");
 	let session;
 	try {
-		session = await openSession(browserName, { headless: !options.headful });
+		session = await openSession(browserName, { headless: !options.headful, release: Boolean(options.release) });
 	} catch (error) {
 		failures++;
 		console.log("FAIL [" + browserName + "] could not open a session: " + error.message);
 		return;
+	}
+	// say which build was graded: a run that is going to gate a release is a record, and
+	// "it passed" means nothing without this line
+	console.log("   testing " + (session.releaseZip || session.extensionPath));
+	if (session.releaseStaleness) {
+		console.log("   WARNING this package is stale: " + session.releaseStaleness);
 	}
 	try {
 		for (const specName of listSpecs()) {
