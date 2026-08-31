@@ -2,7 +2,7 @@
 // per-browser differences are confined to launch-chromium.mjs / launch-firefox.mjs and
 // to how the installed extension's origin is derived.
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -11,6 +11,7 @@ import { launchFirefox, SINGLEFILE_UUID } from "./launch-firefox.mjs";
 import { buildRelay } from "../relay/build.mjs";
 import { startBridge } from "../relay/bridge.mjs";
 import { unpackRelease } from "./release-build.mjs";
+import { guardDirectory, releaseDirectory } from "./process-guard.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 // the MV2 build is the Firefox one, the MV3 build is the Chromium one
@@ -37,8 +38,10 @@ async function openSession(browserName, { headless = true, release = false } = {
 	try {
 		singlefileId = readGeckoId(extensionPath);
 		downloadDir = mkdtempSync(join(tmpdir(), "sf-fn-dl-"));
+		guardDirectory(downloadDir);
 		bridge = await startBridge();
 		relayPath = buildRelay(browserName, bridge.url);
+		guardDirectory(relayPath);
 		browser = browserName == "firefox"
 			? await launchFirefox({ singlefileId, downloadDir, headless })
 			: await launchChromium({ downloadDir, headless });
@@ -47,7 +50,7 @@ async function openSession(browserName, { headless = true, release = false } = {
 		if (bridge) {
 			await bridge.close();
 		}
-		[relayPath, downloadDir].forEach(path => path && rmSync(path, { recursive: true, force: true }));
+		[relayPath, downloadDir].forEach(path => path && releaseDirectory(path));
 		if (releaseBuild) {
 			releaseBuild.dispose();
 		}
@@ -169,7 +172,9 @@ async function openSession(browserName, { headless = true, release = false } = {
 	async function importSettings(profile, { profileName = "__Default_Settings__" } = {}) {
 		const context = await openTab(singlefileURL(OPTIONS_PAGE));
 		await setViewport(context, OPTIONS_VIEWPORT.width, OPTIONS_VIEWPORT.height);
-		const settingsPath = join(mkdtempSync(join(tmpdir(), "sf-fn-settings-")), "settings.json");
+		const settingsDir = mkdtempSync(join(tmpdir(), "sf-fn-settings-"));
+		guardDirectory(settingsDir);
+		const settingsPath = join(settingsDir, "settings.json");
 		writeFileSync(settingsPath, JSON.stringify({ profiles: { [profileName]: profile }, rules: [] }));
 		// the click is what registers the file input's change handler
 		await click(context, "#importButton");
@@ -187,7 +192,8 @@ async function openSession(browserName, { headless = true, release = false } = {
 		});
 		// the handler reads the file and writes storage asynchronously
 		await new Promise(resolve => setTimeout(resolve, 2500));
-		rmSync(settingsPath, { force: true });
+		// the directory, not just the file inside it: this runs once per option change
+		releaseDirectory(settingsDir);
 		return context;
 	}
 
@@ -214,8 +220,8 @@ async function openSession(browserName, { headless = true, release = false } = {
 		session.close();
 		await browser.close();
 		await bridge.close();
-		rmSync(relayPath, { recursive: true, force: true });
-		rmSync(downloadDir, { recursive: true, force: true });
+		releaseDirectory(relayPath);
+		releaseDirectory(downloadDir);
 		// the unpacked release carries the injected Woleet key, so it does not outlive the run
 		if (releaseBuild) {
 			releaseBuild.dispose();

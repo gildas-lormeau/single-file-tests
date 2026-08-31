@@ -4,7 +4,8 @@
 // --enable-unsafe-extension-debugging and --remote-debugging-pipe.
 
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync, rmSync } from "node:fs";
+import { guardProcess, releaseProcess, guardDirectory, releaseDirectory } from "./process-guard.mjs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { connectBiDi } from "./bidi.mjs";
@@ -39,6 +40,9 @@ async function launchChromium({ downloadDir, headless = true }) {
 
 	const port = await freePort();
 	const driverProcess = spawn(driverBinary, ["--port=" + port, "--allowed-ips="], { stdio: ["ignore", "pipe", "pipe"] });
+	// chromedriver owns the browser process, so killing it takes the whole Chrome tree with it
+	guardProcess(driverProcess);
+	guardDirectory(userDataDir);
 	let driverLog = "";
 	driverProcess.stdout.on("data", data => driverLog = (driverLog + data).slice(-4096));
 	driverProcess.stderr.on("data", data => driverLog = (driverLog + data).slice(-4096));
@@ -87,7 +91,8 @@ async function launchChromium({ downloadDir, headless = true }) {
 			await exited;
 			clearTimeout(killer);
 		}
-		rmSync(userDataDir, { recursive: true, force: true });
+		releaseProcess(driverProcess);
+		releaseDirectory(userDataDir);
 	}
 }
 

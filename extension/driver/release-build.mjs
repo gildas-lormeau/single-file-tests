@@ -13,6 +13,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { guardDirectory, releaseDirectory } from "./process-guard.mjs";
 
 export { unpackRelease, RELEASE_PACKAGES };
 
@@ -39,7 +40,6 @@ function unpackRelease(browserName, repoRoot) {
 		throw new Error("no release package at " + zipPath + " — run ./build-extension.sh in " + directory + " first");
 	}
 	const staleness = describeStaleness(zipPath, packageRoot);
-	registerCleanup();
 	const target = mkdtempSync(join(tmpdir(), "sf-release-" + browserName + "-"));
 	try {
 		execFileSync("unzip", ["-q", zipPath, "-d", target]);
@@ -51,31 +51,10 @@ function unpackRelease(browserName, repoRoot) {
 		rmSync(target, { recursive: true, force: true });
 		throw new Error(zipPath + " has no manifest.json at its root");
 	}
-	unpacked.add(target);
-	return { path: target, zipPath, staleness, dispose: () => dispose(target) };
-}
-
-// The unpacked copy holds the injected Woleet key, so it must not survive the process
-// even when the process does not end the way it meant to — an interrupted run, a pipe
-// closing early, a spec throwing past the session teardown.
-const unpacked = new Set();
-let cleanupRegistered = false;
-
-function dispose(target) {
-	rmSync(target, { recursive: true, force: true });
-	unpacked.delete(target);
-}
-
-function registerCleanup() {
-	if (cleanupRegistered) {
-		return;
-	}
-	cleanupRegistered = true;
-	process.on("exit", () => unpacked.forEach(target => rmSync(target, { recursive: true, force: true })));
-	["SIGINT", "SIGTERM", "SIGHUP"].forEach(signal => process.on(signal, () => {
-		unpacked.forEach(target => rmSync(target, { recursive: true, force: true }));
-		process.exit(1);
-	}));
+	// the unpacked copy holds the injected Woleet key, so it must not survive the process
+	// even when the process does not end the way it meant to
+	guardDirectory(target);
+	return { path: target, zipPath, staleness, dispose: () => releaseDirectory(target) };
 }
 
 // A release gate that silently tests last week's package is worse than no gate, so say so

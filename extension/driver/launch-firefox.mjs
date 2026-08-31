@@ -4,7 +4,8 @@
 // profile, so it has to be pinned in the profile before first launch.
 
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { guardProcess, releaseProcess, guardDirectory, releaseDirectory } from "./process-guard.mjs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { connectBiDi } from "./bidi.mjs";
@@ -59,6 +60,10 @@ async function launchFirefox({ singlefileId, downloadDir, headless = true }) {
 		stdio: ["ignore", "ignore", "pipe"],
 		env: { ...process.env, MOZ_NO_REMOTE: "1" }
 	});
+	// only ever this pid: the machine running the suite is also someone's desktop, and
+	// their own Firefox is not the harness's to kill
+	guardProcess(browserProcess);
+	guardDirectory(profileDir);
 	let stderr = "";
 	browserProcess.stderr.on("data", data => stderr = (stderr + data).slice(-4096));
 
@@ -77,7 +82,8 @@ async function launchFirefox({ singlefileId, downloadDir, headless = true }) {
 			browserProcess.kill("SIGKILL");
 			await exited;
 		}
-		rmSync(profileDir, { recursive: true, force: true });
+		releaseProcess(browserProcess);
+		releaseDirectory(profileDir);
 	}
 }
 
