@@ -19,6 +19,7 @@ const options = parseArguments(process.argv.slice(2));
 const browsers = options.browser ? [options.browser] : BROWSERS;
 let failures = 0;
 let passes = 0;
+let known = 0;
 
 const fixtures = await startFixtureServer();
 try {
@@ -28,7 +29,8 @@ try {
 } finally {
 	await fixtures.close();
 }
-console.log("\n" + (failures ? "FAILED" : "PASSED") + " (" + passes + " passed, " + failures + " failed)");
+console.log("\n" + (failures ? "FAILED" : "PASSED") + " (" + passes + " passed, " + failures + " failed"
+	+ (known ? ", " + known + " known" : "") + ")");
 process.exit(failures ? 1 : 0);
 
 async function runBrowser(browserName) {
@@ -57,8 +59,13 @@ async function runBrowser(browserName) {
 	}
 }
 
-// a spec reports a failure by returning a reason; returning nothing means it passed
-async function test(label, body) {
+// A spec reports a failure by returning a reason; returning nothing means it passed.
+//
+// A test may be marked `known`, meaning it asserts the behaviour SingleFile should have
+// and documents the defect that stops it. Failing then reports KNOWN and does not make
+// the run red. Passing does, because a known failure that starts passing means the defect
+// is fixed and the marker is now lying about the code.
+async function test(label, body, { known: knownReason } = {}) {
 	const started = Date.now();
 	let problem;
 	try {
@@ -67,9 +74,16 @@ async function test(label, body) {
 		problem = error.message;
 	}
 	const elapsed = Math.round((Date.now() - started) / 100) / 10 + "s";
-	if (problem) {
+	if (problem && knownReason) {
+		known++;
+		console.log("  KNOWN " + label + " (" + elapsed + ")\n        " + problem + "\n        known: " + knownReason);
+	} else if (problem) {
 		failures++;
 		console.log("  FAIL " + label + " (" + elapsed + ")\n        " + problem);
+	} else if (knownReason) {
+		failures++;
+		console.log("  FAIL " + label + " (" + elapsed + ")\n        this is marked known but passed; drop the marker: "
+			+ knownReason);
 	} else {
 		passes++;
 		console.log("  PASS " + label + " (" + elapsed + ")");
