@@ -66,9 +66,9 @@ function startBridge() {
 		waiting.push(holder);
 	}
 
-	function dispatch(targetId, message, expectResponse) {
+	function dispatch(targetId, message, expectResponse, responseTimeout) {
 		const id = nextId++;
-		const command = { id, targetId, message, expectResponse };
+		const command = { id, targetId, message, expectResponse, responseTimeout };
 		const holder = waiting.shift();
 		if (holder) {
 			clearTimeout(holder.timer);

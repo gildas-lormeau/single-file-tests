@@ -47,7 +47,7 @@ async function openSession(browserName, { headless = true } = {}) {
 		singlefileOrigin = browserName == "firefox"
 			? "moz-extension://" + SINGLEFILE_UUID
 			: "chrome-extension://" + singlefile.extension;
-		await bridge.waitForRelay();
+		const relay = await bridge.waitForRelay();
 		return {
 			browserName,
 			session,
@@ -58,9 +58,12 @@ async function openSession(browserName, { headless = true } = {}) {
 			// runtime.onMessageExternal API, exactly as another extension would
 			// expectResponse only for messages that return data (capture-page); the save
 			// actions never answer, so waiting on them costs a full timeout per dispatch
-			dispatch: (message, { expectResponse = false } = {}) =>
-				bridge.dispatch(singlefile.extension, message, expectResponse),
+			dispatch: (message, { expectResponse = false, responseTimeout } = {}) =>
+				bridge.dispatch(singlefile.extension, message, expectResponse, responseTimeout),
+			// SingleFile identifies the caller by this id when granting capture permission
+			relayId: relay && relay.id,
 			openTab,
+			closeTab,
 			setViewport,
 			// level 2: real pointer and keyboard input aimed at a real element
 			click,
@@ -84,6 +87,10 @@ async function openSession(browserName, { headless = true } = {}) {
 	// A headless window is short, and a pointer aimed at an element below the fold lands
 	// on whatever is on top instead of erroring. Giving a long page a viewport tall enough
 	// to hold it is the reliable way to keep controls clickable.
+	async function closeTab(context) {
+		await session.send("browsingContext.close", { context }).catch(() => undefined);
+	}
+
 	async function setViewport(context, width, height) {
 		await session.send("browsingContext.setViewport", { context, viewport: { width, height } });
 	}

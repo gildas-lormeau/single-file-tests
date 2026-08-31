@@ -44,6 +44,13 @@ the harness exercises the same action strings the menu items use: `save-page`,
 `edit-and-save-page`, `save-selected-links`, `save-selected-content`,
 `save-selected-tabs`, `save-unpinned-tabs`, `save-all-tabs`, plus `capture-page`.
 
+`capture-page` is the only one that returns a value, so it is the only caller that needs
+`dispatch(message, { expectResponse: true })`. It is also gated by a permission prompt:
+SingleFile opens its options page with an `externalCaptureRequestId` in the query string
+and waits for a real click on Approve. Note the prompt tab stays open after approval and
+becomes the active tab, and `capture-page` targets whichever tab is active — so re-open
+the page you meant to capture before asking again.
+
 The relay long-polls the harness over loopback HTTP rather than holding a WebSocket,
 because an MV3 service worker can be terminated between commands.
 

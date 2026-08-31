@@ -41,9 +41,9 @@ async function poll() {
 	return response.json();
 }
 
-async function run({ id, targetId, message, expectResponse }) {
+async function run({ id, targetId, message, expectResponse, responseTimeout }) {
 	try {
-		const value = await sendExternal(targetId, message, expectResponse);
+		const value = await sendExternal(targetId, message, expectResponse, responseTimeout);
 		return { id, ok: true, value: serializable(value) };
 	} catch (error) {
 		return { id, ok: false, error: String(error && error.message || error) };
@@ -54,7 +54,7 @@ async function run({ id, targetId, message, expectResponse }) {
 // waiting for one costs the full timeout on every single dispatch. Only wait when the
 // caller actually wants a value back (capture-page); otherwise hand back as soon as the
 // message is away and let the test wait for the observable outcome instead.
-function sendExternal(targetId, message, expectResponse) {
+function sendExternal(targetId, message, expectResponse, responseTimeout) {
 	return new Promise((resolve, reject) => {
 		let settled = false;
 		const done = value => {
@@ -82,7 +82,7 @@ function sendExternal(targetId, message, expectResponse) {
 			});
 		}
 		if (expectResponse) {
-			setTimeout(() => done({ noResponse: true, detail: "timeout" }), RESPONSE_TIMEOUT);
+			setTimeout(() => done({ noResponse: true, detail: "timeout" }), responseTimeout || RESPONSE_TIMEOUT);
 		} else {
 			done({ dispatched: true });
 		}
