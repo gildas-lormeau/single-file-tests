@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<title>Functional fixture</title>
+	<link rel="stylesheet" href="simple.css">
+</head>
+
+<body>
+	<h1 id="marker">FUNCTIONAL_FIXTURE_MARKER</h1>
+	<p class="styled">This paragraph is styled by an external stylesheet, so a correct save must inline it.</p>
+	<img id="logo" src="logo.svg" alt="fixture logo" width="64" height="64">
+	<script>
+		// the saved page keeps this attribute but drops the script tag itself
+		document.getElementById("marker").dataset.scriptRan = "yes";
+	</script>
+</body>
+
+</html>

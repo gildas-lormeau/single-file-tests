@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<title>Rich functional fixture</title>
+	<link rel="stylesheet" href="rich.css">
+	<style>
+		/* an inline rule that is used, next to one that never matches anything */
+		#inline-styled {
+			outline: 2px solid rgb(9, 121, 105);
+		}
+
+		.never-matched-inline {
+			color: rgb(1, 2, 3);
+		}
+	</style>
+</head>
+
+<body>
+	<h1 id="marker">FUNCTIONAL_FIXTURE_MARKER</h1>
+
+	<p class="styled">Styled by an external stylesheet, so a correct save must inline it.</p>
+	<p class="imported">Styled by an @import-ed stylesheet, one level deeper.</p>
+	<p class="webfont">Set in a webfont that must be embedded as a data URI.</p>
+	<p id="inline-styled">Styled by the inline &lt;style&gt; element.</p>
+
+	<div id="backdrop">Background image supplied through a CSS custom property.</div>
+
+	<img id="logo" src="logo.svg" alt="fixture logo" width="64" height="64">
+	<img id="responsive" src="photo.png" srcset="photo.png 1x, photo-2x.png 2x" alt="responsive photo" width="32"
+		height="32">
+	<picture>
+		<source srcset="photo-2x.png" media="(min-width: 1px)">
+		<img id="picture-image" src="photo.png" alt="picture photo" width="32" height="32">
+	</picture>
+
+	<svg id="inline-svg" width="40" height="40" viewBox="0 0 40 40">
+		<defs>
+			<circle id="dot" cx="20" cy="20" r="15" />
+		</defs>
+		<use href="#dot" fill="rgb(180, 60, 200)" />
+	</svg>
+
+	<canvas id="canvas" width="40" height="40"></canvas>
+
+	<div id="shadow-host"></div>
+
+	<iframe id="frame" src="rich-frame.html" width="200" height="80" title="fixture frame"></iframe>
+
+	<!-- pushed far below the fold so a lazy image is genuinely not loaded at save time -->
+	<div id="spacer"></div>
+	<img id="lazy" src="lazy.png" loading="lazy" alt="lazy photo" width="24" height="24">
+
+	<script>
+		document.getElementById("marker").dataset.scriptRan = "yes";
+
+		const context = document.getElementById("canvas").getContext("2d");
+		context.fillStyle = "rgb(255, 140, 0)";
+		context.fillRect(0, 0, 40, 40);
+		context.fillStyle = "rgb(0, 90, 255)";
+		context.fillRect(10, 10, 20, 20);
+
+		const shadow = document.getElementById("shadow-host").attachShadow({ mode: "open" });
+		const sheet = new CSSStyleSheet();
+		sheet.replaceSync("p { color: rgb(120, 20, 20); }");
+		shadow.adoptedStyleSheets = [sheet];
+		shadow.innerHTML = "<p id=\"shadow-text\">SHADOW_DOM_MARKER</p>";
+	</script>
+</body>
+
+</html>

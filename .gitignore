@@ -1,5 +1,6 @@
 node_modules
-fixtures
+# only the built and handed-off artifacts at the root; extension/fixtures/ is source
+/fixtures
 test-results
 playwright-report
 .DS_Store

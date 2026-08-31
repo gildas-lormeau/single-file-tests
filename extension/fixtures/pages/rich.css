@@ -1,0 +1,32 @@
+@import url("rich-imported.css");
+
+@font-face {
+	font-family: "FixtureFont";
+	src: url("fixture-font.ttf") format("truetype");
+}
+
+:root {
+	--backdrop: url("backdrop.png");
+}
+
+.styled {
+	color: rgb(17, 85, 204);
+}
+
+.webfont {
+	font-family: "FixtureFont", monospace;
+}
+
+#backdrop {
+	background-image: var(--backdrop);
+	height: 40px;
+}
+
+#spacer {
+	height: 3000px;
+}
+
+/* never matches anything on the page, so removeUnusedStyles has something to remove */
+.never-matched-external {
+	color: rgb(4, 5, 6);
+}
