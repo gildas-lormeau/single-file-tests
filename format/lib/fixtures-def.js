@@ -93,4 +93,68 @@ export const TERMINATOR_FIXTURES = [
 
 export const MARKER_TEXT = "SFZ_TEST_OK";
 
-export const ARCHIVE_FIXTURES = ["archive-base.html", "archive-fallback-tag.html", "archive-plaintext.html", "archive-corrupted.html"];
+// The containers the writer can hide the zip data in, cheapest first. This mirrors
+// EMBEDDED_DATA_TAGS in single-file-core's compression.js: a container is unusable when
+// the payload contains the token that would close it early, so the writer walks down this
+// list until it finds one the payload cannot break. <plaintext> is last because it is the
+// only rung that cannot be closed at all.
+//
+// `detect` is what the container looks like immediately before the zip data. The writer
+// adds an id to some of them, so these are prefixes rather than exact tags.
+export const WRAPPER_LADDER = [
+	{ name: "comment", detect: "<!--", closedBy: ["-->", "--!>"] },
+	{ name: "script", detect: "<script type=sfz-data", closedBy: ["</script"] },
+	{ name: "style", detect: "<style type=sfz-data", closedBy: ["</style"] },
+	{ name: "noframes", detect: "<noframes", closedBy: ["</noframes"] },
+	{ name: "noembed", detect: "<noembed", closedBy: ["</noembed"] },
+	{ name: "iframe", detect: "<iframe", closedBy: ["</iframe"] },
+	{ name: "xmp", detect: "<xmp", closedBy: ["</xmp"] },
+	{ name: "cdata", detect: "<![CDATA[", closedBy: ["]]>"] },
+	{ name: "plaintext", detect: "<plaintext", closedBy: [] }
+];
+
+// Each archive fixture exists to force the writer a given distance down the ladder, so the
+// hostile payload and the expectation belong together. build-fixtures.js composes the page
+// around `payload`, which keeps the content and the assertions from drifting apart.
+export const ARCHIVE_FIXTURES = [
+	{
+		name: "archive-base.html",
+		// nothing hostile: the writer should stay on the cheapest container
+		payload: ""
+	},
+	{
+		name: "archive-fallback-tag.html",
+		payload: "--&gt; here is a literal --> comment close"
+	},
+	{
+		name: "archive-plaintext.html",
+		payload: "--> --!> </noscript> </noframes> </noembed> </script> </style> </iframe> </xmp>"
+	}
+];
+
+const ZIP_LOCAL_HEADER = Buffer.from([0x50, 0x4B, 0x03, 0x04]);
+
+// Identify the container by what sits immediately before the zip data. A substring search
+// over the whole file would also match the payload or the bootstrap script, and would pass
+// for the wrong reason.
+export function wrapperRungOf(buffer) {
+	const zipStart = buffer.indexOf(ZIP_LOCAL_HEADER);
+	if (zipStart == -1) {
+		return { rung: undefined, tail: "" };
+	}
+	const tail = buffer.subarray(Math.max(0, zipStart - 120), zipStart).toString("latin1");
+	const found = WRAPPER_LADDER.find(rung => tail.includes(rung.detect));
+	return { rung: found && found.name, tail };
+}
+
+export function unusableRungs(payload) {
+	return WRAPPER_LADDER
+		.filter(rung => rung.closedBy.some(token => payload.includes(token)))
+		.map(rung => rung.name);
+}
+
+export function cheapestUsableRung(payload) {
+	const unusable = unusableRungs(payload);
+	const found = WRAPPER_LADDER.find(rung => !unusable.includes(rung.name));
+	return found && found.name;
+}
