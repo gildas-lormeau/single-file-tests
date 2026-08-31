@@ -128,23 +128,16 @@ for (const fixture of FACE_FIXTURES) {
 // combinations actually bite: the PNG face takes the doctype and the end tags away from
 // it, and the PDF face sits in the middle of its head.
 //
-// The PDF rows are marked test.fail() rather than weakened, for the reason the extension
-// suite marks a known failure: an assertion softened to match a bug locks the bug in and
-// stops reporting it. Playwright fails the run if one of these starts passing, so the
-// marker cannot outlive the defect it names.
+// These two rows were expected failures when this spec was written: with the PDF face,
+// universal mode threw "Local file header not found" in every engine. page.pdf reaches the
+// extractor with an offset outside the recovered region, which compression-extract.js
+// means to skip — but its test compares the decoded filename, and page.pdf is the one
+// entry whose record carries no UTF-8 flag, so in a page decoded as windows-1252 its name
+// came back as mojibake and the skip missed. Fixed in core 1.5.119 by keeping the inlined
+// zip build free of non-ASCII characters, which is what made that decoding wrong.
 for (const { name, faces } of FACE_FIXTURES.filter(fixture => fixture.faces.includes("html"))) {
 	const others = faces.filter(face => face != "html" && face != "zip");
 	test(`${name} still self-extracts with the ${others.join(" and ")} face present`, async ({ page }) => {
-		// KNOWN: universal mode + the PDF face does not self-extract in any engine. The
-		// page.pdf entry reaches the extractor with an offset outside the recovered region
-		// (measured: -74015), which is exactly the case compression-extract.js means to skip
-		// — but its test compares the *decoded* filename, and page.pdf is the one entry whose
-		// hand-built central record (getPDFEntry in compression.js) omits the UTF-8 language
-		// encoding flag. Inside the page that name decodes to mojibake, the skip misses, and
-		// the whole extraction throws "Local file header not found".
-		// Setting bit 11 on the hand-built record makes all three variants self-extract.
-		// §2 of doc/singlefile-archive.md specifies the entry is skipped, so this is a bug.
-		test.fail(faces.includes("pdf"), "page.pdf is not skipped in universal mode: its record has no UTF-8 flag");
 		await page.goto(fixtureURL(name));
 		await expect(page.locator("#marker")).toHaveText(MARKER_TEXT);
 	});
