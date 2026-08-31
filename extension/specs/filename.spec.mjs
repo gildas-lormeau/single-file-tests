@@ -75,6 +75,11 @@ export async function run({ session, fixtures, test }) {
 	});
 
 	await test("a title longer than the limit is truncated to the limit", async () => {
+		// this was a known failure until core 1.5.119: template-formatter.js truncated to
+		// (limit - extension length), then appended an ellipsis and the extension without
+		// counting the ellipsis, so the name overran by its 3 bytes. Harmless at the default
+		// 192, but a user who set the limit to the filesystem's own maximum got a name the
+		// filesystem then refused. Fixed by c8c2e84.
 		const { name } = await saveTitled(session, fixtures, "L" + "o".repeat(400) + "ng");
 		if (!name.startsWith("Lo") || !name.endsWith(".html")) {
 			return "saved as " + JSON.stringify(name);
@@ -83,12 +88,6 @@ export async function run({ session, fixtures, test }) {
 		return size > MAX_FILENAME_BYTES
 			? "the filename is " + size + " bytes, over the " + MAX_FILENAME_BYTES + " byte limit"
 			: undefined;
-	}, {
-		// template-formatter.js truncates to (limit - extension length), then appends an
-		// ellipsis and the extension without counting the ellipsis, so the result overruns
-		// by its 3 bytes. Harmless at the default 192, but a user who sets the limit to the
-		// filesystem's own maximum gets a name the filesystem then refuses.
-		known: "the ellipsis added after truncation is not counted against filenameMaxLength"
 	});
 
 	await test("a title cannot steer the save out of the download directory", async () => {
