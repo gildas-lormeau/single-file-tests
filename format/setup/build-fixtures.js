@@ -1,9 +1,10 @@
-import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { configure } from "../../../single-file-core/vendor/zip/zip.js";
 import { process as processPage } from "../../../single-file-core/processors/compression/compression.js";
-import { FIXTURES_DIR, PAYLOADS, CONTAINERS, buildParserPage, parserFixtureName, TERMINATOR_FIXTURES, MARKER_TEXT, mulberry32, ARCHIVE_FIXTURES } from "../lib/fixtures-def.js";
+import { FIXTURES_DIR, PAYLOADS, CONTAINERS, buildParserPage, parserFixtureName, TERMINATOR_FIXTURES, MARKER_TEXT, mulberry32, ARCHIVE_FIXTURES, FACE_FIXTURES, renamedFixtureName } from "../lib/fixtures-def.js";
+import { buildPNG, buildPDF } from "../lib/face-payloads.js";
 
 const CORE_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "single-file-core");
 
@@ -11,6 +12,7 @@ export default async function buildFixtures() {
 	mkdirSync(FIXTURES_DIR, { recursive: true });
 	buildParserFixtures();
 	await buildArchiveFixtures();
+	await buildFaceFixtures();
 }
 
 function buildParserFixtures() {
@@ -71,6 +73,36 @@ async function buildArchiveFixtures() {
 		};
 		const blob = await processPage(pageData, options);
 		writeFileSync(join(FIXTURES_DIR, name), Buffer.from(await blob.arrayBuffer()));
+	}
+}
+
+// One archive per face combination, plus the renamed copies §1.2 promises will open. The
+// copy is made here rather than in the spec because the three Playwright projects run in
+// parallel workers and would otherwise race to write the same file.
+async function buildFaceFixtures() {
+	configure({ useWebWorkers: false });
+	const zipScript = readFileSync(join(CORE_DIR, "vendor", "zip", "zip.min.js"), "utf8");
+	const embeddedImage = Array.from(buildPNG());
+	const embeddedPdf = Array.from(buildPDF());
+	for (const { name, options } of FACE_FIXTURES) {
+		const content = "<!DOCTYPE html><html><head><meta charset=utf-8><title>" + name + "</title></head>" +
+			`<body><h1 id=marker>${MARKER_TEXT}</h1></body></html>`;
+		const pageData = { content, title: name, doctype: "<!DOCTYPE html>", resources: {} };
+		const blob = await processPage(pageData, {
+			...options,
+			// the option carries the bytes, so each archive gets its own copy: process()
+			// replaces embeddedImage with a Uint8Array view of whatever it was handed
+			embeddedImage: options.embeddedImage ? embeddedImage.slice() : undefined,
+			embeddedPdf: options.embeddedPdf ? embeddedPdf.slice() : undefined,
+			zipScript,
+			url: "https://example.com/"
+		});
+		writeFileSync(join(FIXTURES_DIR, name), Buffer.from(await blob.arrayBuffer()));
+	}
+	for (const { name, renames } of FACE_FIXTURES) {
+		for (const extension of renames) {
+			copyFileSync(join(FIXTURES_DIR, name), join(FIXTURES_DIR, renamedFixtureName(name, extension)));
+		}
 	}
 }
 

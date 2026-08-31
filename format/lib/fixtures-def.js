@@ -132,6 +132,58 @@ export const ARCHIVE_FIXTURES = [
 	}
 ];
 
+// The polyglot faces (doc/singlefile-archive.md §2). Every archive has the ZIP face; the
+// HTML, PDF and PNG faces are enabled independently, and the point of these fixtures is
+// the combinations — the PNG face owns both ends of the file, the PDF face has to land in
+// a scan window, and the HTML face has to keep self-extracting with either of them there.
+//
+// Naming follows §7 of the spec: an archive with no HTML face is a plain ZIP and gets the
+// .zip extension, because that is the only name under which anything will open it.
+//
+// `renames` are the extensions the same bytes are copied to. That copy is the thing under
+// test: §1.2 promises the file opens in a PDF reader or an image viewer once renamed, and
+// a face that was silently dropped fails there and nowhere else. dropUnhiddenFace() in
+// compression.js is allowed to drop one whenever no wrapper rung fits its payload, so the
+// archive still saves, still self-extracts, and quietly is not a PNG any more.
+export const FACE_FIXTURES = [
+	{
+		name: "faces-png.html",
+		faces: ["html", "zip", "png"],
+		renames: ["png"],
+		options: { selfExtractingArchive: true, extractDataFromPage: true, embeddedImage: true }
+	},
+	{
+		name: "faces-pdf.html",
+		faces: ["html", "zip", "pdf"],
+		renames: ["pdf"],
+		options: { selfExtractingArchive: true, extractDataFromPage: true, embeddedPdf: true }
+	},
+	{
+		name: "faces-all.html",
+		faces: ["html", "zip", "pdf", "png"],
+		renames: ["png", "pdf"],
+		options: { selfExtractingArchive: true, extractDataFromPage: true, embeddedImage: true, embeddedPdf: true }
+	},
+	{
+		// no HTML face: the PDF document simply starts the file, as prepended data the ZIP
+		// face tolerates, and page.pdf is not an archive entry at all (§3)
+		name: "faces-pdf-only.zip",
+		faces: ["zip", "pdf"],
+		renames: ["pdf"],
+		options: { selfExtractingArchive: false, embeddedPdf: true }
+	},
+	{
+		name: "faces-png-only.zip",
+		faces: ["zip", "png"],
+		renames: ["png"],
+		options: { selfExtractingArchive: false, embeddedImage: true }
+	}
+];
+
+export function renamedFixtureName(name, extension) {
+	return name.replace(/\.[^.]+$/, "") + "." + extension;
+}
+
 const ZIP_LOCAL_HEADER = Buffer.from([0x50, 0x4B, 0x03, 0x04]);
 
 // Identify the container by what sits immediately before the zip data. A substring search

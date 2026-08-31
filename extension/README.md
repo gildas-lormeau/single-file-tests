@@ -160,6 +160,28 @@ known failure that starts passing means the defect is fixed and the marker has s
 lying about the code. Use this rather than weakening an assertion to match a bug: the
 weakened version locks the bug in and nothing tells you when it goes away.
 
+## The other faces
+
+`format/specs/faces.spec.js` is where the archive gets opened as something other than a
+page. An SFZ is valid in up to four formats at once, and every other spec in this
+repository reaches it through the HTML bootstrap — the one face that cannot tell you the
+others are gone. `compression.js` is allowed to drop a face whose payload no wrapper rung
+fits, which is correct behaviour: a face is a convenience and the archive is not. The file
+still saves, still self-extracts, and simply is not a PNG any more.
+
+So those tests rename the fixture and hand it to the reader that owns the extension:
+`zipinfo` and `unzip -t` for the ZIP face, `pdftotext` and `pdfinfo` for the PDF face, a
+real `<img>` in all three engines for the PNG face. Renaming to `.zip` is deliberately not
+a browser test — a browser hands a `.zip` to the download manager, so there is nothing
+rendered to assert.
+
+Two things there are worth knowing. The PNG chunk framing is parsed in
+`format/lib/readers.js` rather than delegated, because the archive rides inside a `tEXt`
+chunk whose length and CRC are patched after the archive bytes are final: get either wrong
+and every viewer still shows the image, since the damage is past the pixel data. And
+poppler is optional — those tests skip loudly rather than fail when `pdftotext` is not
+installed, which matters because a skipped test in a release gate is not a passing one.
+
 ## The fixture pages
 
 `fixtures/pages/simple.html` is a stylesheet, an image and a script — enough for a test
