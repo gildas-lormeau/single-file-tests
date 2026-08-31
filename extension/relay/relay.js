@@ -50,10 +50,15 @@ async function run({ id, targetId, message, expectResponse, responseTimeout }) {
 	}
 }
 
-// SingleFile's save actions never answer: on Chromium the callback simply never fires, so
-// waiting for one costs the full timeout on every single dispatch. Only wait when the
-// caller actually wants a value back (capture-page); otherwise hand back as soon as the
-// message is away and let the test wait for the observable outcome instead.
+// Only wait when the caller actually wants a value back (capture-page); otherwise hand
+// back as soon as the message is away and let the test wait for the observable outcome.
+//
+// That is the right shape for a save regardless, but be aware it also steps around a
+// defect: SingleFile's Chromium polyfill returns true from its onMessage/onMessageExternal
+// wrappers, promising an async response, then skips sendResponse when the handler resolves
+// with undefined or rejects. The save actions resolve with undefined, so on Chromium a
+// waiting caller gets no answer at all and burns its whole timeout. Do not "fix" this by
+// waiting again — the fix belongs in chrome-browser-polyfill.js.
 function sendExternal(targetId, message, expectResponse, responseTimeout) {
 	return new Promise((resolve, reject) => {
 		let settled = false;
