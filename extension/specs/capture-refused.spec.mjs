@@ -14,11 +14,10 @@ const MARKER_TEXT = "FUNCTIONAL_FIXTURE_MARKER";
 const PROMPT_MARKER = "externalCaptureRequestId";
 const OPTIONS_VIEWPORT = { width: 1200, height: 4000 };
 const REFUSAL_MESSAGE = "SingleFile capture was not approved for this extension";
+// Until the polyfill grew a catch, Chromium answered a refusal by never answering at all,
+// so this bounded what was otherwise a wait for the channel to be torn down. Keep it: it
+// is the assertion that the caller is answered promptly rather than eventually.
 const REFUSAL_TIMEOUT = 5000;
-// Chromium answers a refusal by never answering at all, so waiting the full timeout is
-// the outcome rather than a hang; keep it short enough not to dominate the run
-const CHROMIUM_DEFECT = "chrome-browser-polyfill.js returns true from its onMessageExternal "
-	+ "wrapper but skips sendResponse when the handler rejects, so a refused caller is told nothing";
 
 export const name = "capture-refused";
 export const level = 2;
@@ -38,7 +37,7 @@ export async function run({ session, fixtures, test }) {
 		const outcome = await capturing;
 		await session.closeTab(promptContext);
 		return describeRefusal(outcome);
-	}, { known: session.browserName == "chromium" ? CHROMIUM_DEFECT : undefined });
+	});
 
 	await test("a refused caller is refused again without a new prompt", async () => {
 		await session.openTab(fixtures.url("simple.html"));
@@ -88,9 +87,11 @@ async function outcomeOf(promise) {
 	}
 }
 
-// What matters is that the reason reaches the caller, not which channel carries it.
-// Firefox delivers it through runtime.lastError, which is the normal way a rejected
-// onMessageExternal handler surfaces, so that counts.
+// What matters is that the reason reaches the caller, not which channel carries it. The
+// two engines cannot use the same one: Firefox reports a rejected onMessageExternal
+// handler through runtime.lastError, and Chrome gives a listener no way to set it, so
+// there the reason arrives as an { error } response instead. Both count; being told
+// nothing does not.
 function describeRefusal({ value, error }) {
 	if (error) {
 		return error.includes(REFUSAL_MESSAGE) ? undefined : "refused with an unexpected error: " + error;
@@ -99,6 +100,11 @@ function describeRefusal({ value, error }) {
 		return String(value.detail).includes(REFUSAL_MESSAGE)
 			? undefined
 			: "the caller was told nothing at all (" + value.detail + ")";
+	}
+	if (value && value.error) {
+		return String(value.error).includes(REFUSAL_MESSAGE)
+			? undefined
+			: "refused with an unexpected error: " + value.error;
 	}
 	return "the refused caller got " + JSON.stringify(value).slice(0, 120);
 }
