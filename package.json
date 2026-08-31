@@ -1,0 +1,24 @@
+{
+	"name": "single-file-tests",
+	"version": "1.0.0",
+	"description": "Functional and format tests for SingleFile: the browser extension, and the self-extracting archive format",
+	"author": "Gildas Lormeau",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"test": "npm run test-format && npm run test-extension",
+		"test-format": "playwright test",
+		"test-format-chromium": "playwright test --project=chromium",
+		"test-format-firefox": "playwright test --project=firefox",
+		"test-format-webkit": "playwright test --project=webkit",
+		"test-extension": "node extension/run.mjs",
+		"test-extension-chromium": "node extension/run.mjs --browser=chromium",
+		"test-extension-firefox": "node extension/run.mjs --browser=firefox",
+		"lint": "eslint extension format"
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@playwright/test": "^1.49.0",
+		"eslint": "^10.9.1"
+	}
+}
