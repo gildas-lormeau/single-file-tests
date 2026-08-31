@@ -24,10 +24,22 @@ export { openSession, BROWSERS };
 
 const BROWSERS = ["chromium", "firefox"];
 const OPTIONS_PAGE = "src/ui/pages/options.html";
-// the options page is one long column and a headless window is far too short for it; a
+// The options page is one long column and a headless window is far too short for it; a
 // pointer aimed below the fold either errors (Firefox) or silently hits something else
-// (Chromium), so give the page a viewport tall enough to hold its controls
-const OPTIONS_VIEWPORT = { width: 1200, height: 4000 };
+// (Chromium), so give the page a viewport tall enough to hold its controls.
+//
+// Deliberately far taller than the page needs. 4000 was enough until a control near the
+// bottom had to be clicked on Firefox, where the expanded page runs past 4200 — and the
+// failure mode on the other browser is a silent hit on the wrong element, so there is no
+// reason to keep this close to the real height.
+const OPTIONS_VIEWPORT = { width: 1200, height: 12000 };
+const PERMISSION_INPUTS = ["#externalCaptureAllowedIdsInput", "#externalCaptureDeniedIdsInput"];
+// WebDriver special keys, built from code points so nothing can strip them silently
+const BACKSPACE = String.fromCharCode(0xE003);
+const TAB = String.fromCharCode(0xE004);
+const CONTROL = String.fromCharCode(0xE009);
+const META = String.fromCharCode(0xE03D);
+const SELECT_ALL_MODIFIER = process.platform == "darwin" ? META : CONTROL;
 
 // `release` tests the zip build-extension.sh produces instead of the working tree; see
 // release-build.mjs for why the two are not the same thing.
@@ -92,6 +104,7 @@ async function openSession(browserName, { headless = true, release = false } = {
 			click,
 			pressKey,
 			importSettings,
+			resetCapturePermissions,
 			evaluate,
 			close
 		};
@@ -159,6 +172,41 @@ async function openSession(browserName, { headless = true, release = false } = {
 			context,
 			actions: [{ type: "key", id: "keyboard", actions }]
 		});
+	}
+
+	async function pressChord(context, modifier, key) {
+		await session.send("input.performActions", {
+			context,
+			actions: [{
+				type: "key",
+				id: "keyboard",
+				actions: [
+					{ type: "keyDown", value: modifier },
+					{ type: "keyDown", value: key },
+					{ type: "keyUp", value: key },
+					{ type: "keyUp", value: modifier }
+				]
+			}]
+		});
+	}
+
+	// Empty the two permission lists on the options page, which is the only way back to a
+	// clean slate: a capture decision is sticky by design, and the lists live outside the
+	// settings profile, so importSettings does not touch them.
+	//
+	// Each textarea persists on `change`, which a textarea fires on blur — hence the Tab.
+	async function resetCapturePermissions() {
+		const context = await openTab(singlefileURL(OPTIONS_PAGE));
+		await setViewport(context, OPTIONS_VIEWPORT.width, OPTIONS_VIEWPORT.height);
+		await click(context, "#expandAllButton");
+		for (const selector of PERMISSION_INPUTS) {
+			await click(context, selector);
+			await pressChord(context, SELECT_ALL_MODIFIER, "a");
+			await pressKey(context, BACKSPACE);
+			await pressKey(context, TAB);
+		}
+		await new Promise(resolve => setTimeout(resolve, 750));
+		return context;
 	}
 
 	// Set any option without touching its widget, using the options page's own Import

@@ -137,6 +137,13 @@ entirely. Two tests here passed that way before they were tightened.
 Remember that SingleFile compresses its output, so attributes are quoted only when they
 have to be. A pattern written for quoted values will silently match almost nothing.
 
+**A spec that asks for a save must wait for its file.** The download directory is shared
+by every spec in a session, so a save left in flight lands there *after* the next spec has
+called `clearDownloads`, and from then on every `waitForDownload` returns the previous
+test's file. The lag is silent until some assertion happens to care which page it got —
+one dispatch with no `waitForDownload` cost seven failures three specs later, all of them
+reported against innocent code.
+
 ## Known failures
 
 A test may assert the behaviour SingleFile *should* have and name the defect that stops
