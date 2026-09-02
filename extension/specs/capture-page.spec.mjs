@@ -17,23 +17,23 @@ export const level = 2;
 export async function run({ session, fixtures, test }) {
 	await test("an unapproved caller is asked for permission", async () => {
 		await session.openTab(fixtures.url("simple.html"));
-		// The call blocks until someone answers the prompt, so do not await it yet. Give it
-		// a short response window: the value is discarded, and on Chromium waiting for the
-		// real answer costs 30s while the service worker idles out.
-		const capturing = capture(session, {}, 3000);
+		// The call blocks until someone answers the prompt, so do not await it yet
+		const capturing = capture(session, {});
 		const promptContext = await waitForPrompt(session);
 		if (!promptContext) {
 			return "no approval prompt appeared for an unknown caller";
 		}
 		await session.setViewport(promptContext, OPTIONS_VIEWPORT.width, OPTIONS_VIEWPORT.height);
 		await session.click(promptContext, "#externalCaptureApproveButton");
-		// This first capture is expected to come back empty: approving leaves the options
-		// page as the active tab, and capture-page targets whatever is active. Waiting on
-		// it here only keeps the relay in step for the tests that follow.
-		await capturing.catch(() => undefined);
+		// Approving leaves the options page as the active tab. The capture that raised the
+		// prompt must still return the page the caller asked about, not the prompt.
+		const captured = await capturing.catch(error => ({ error: error.message }));
 		// the prompt tab stays open on approval, and a stale one would look like a new
 		// prompt to the test below
 		await session.closeTab(promptContext);
+		if (!captured || !String(captured.content).includes(MARKER_TEXT)) {
+			return "the capture that raised the prompt did not return the fixture page: " + JSON.stringify(captured).slice(0, 200);
+		}
 		return undefined;
 	});
 
