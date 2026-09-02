@@ -33,7 +33,17 @@ export async function run({ session, fixtures, test }) {
 			if (errorText) {
 				return "the viewer displayed an error on a valid page: " + errorText;
 			}
-			return text.includes(MARKER_TEXT) ? undefined : "the viewer did not display the saved page";
+			if (!text.includes(MARKER_TEXT)) {
+				return "the viewer did not display the saved page";
+			}
+			// the page must survive a reload: the blob it reads is released when the tab closes, not before
+			await session.session.send("browsingContext.reload", { context, wait: "complete" });
+			const reloadedText = await waitFor(() => session.evaluate(context, "document.body ? document.body.innerText : \"\""), value => value.includes(MARKER_TEXT));
+			const reloadedError = await session.evaluate(context, ERROR_BAR_TEXT);
+			if (reloadedError || !reloadedText.includes(MARKER_TEXT)) {
+				return "the viewer lost the page after a reload" + (reloadedError ? ": " + reloadedError : "");
+			}
+			return undefined;
 		} finally {
 			if (context) {
 				await session.closeTab(context);
