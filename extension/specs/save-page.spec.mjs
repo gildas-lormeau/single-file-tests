@@ -8,6 +8,7 @@
 import { waitForDownload, clearDownloads, readSavedPage, expectSelfContained, includesDeclaration } from "../expect/saved-page.mjs";
 
 const MARKER_TEXT = "FUNCTIONAL_FIXTURE_MARKER";
+const RESPONSE_TIMEOUT = 30000;
 
 export const name = "save-page";
 export const level = 1;
@@ -15,14 +16,23 @@ export const level = 1;
 export async function run({ session, fixtures, test }) {
 	let savedPath;
 	let content;
+	let response;
 
 	await test("save-page writes an .html file to the download directory", async () => {
 		clearDownloads(session.downloadDir);
 		await session.openTab(fixtures.url("simple.html"));
-		await session.dispatch("save-page");
+		// save-page returns nothing, but the caller must still be answered: on Chromium a
+		// listener that promises a reply and never sends one leaves the caller waiting
+		response = await session.dispatch("save-page", { expectResponse: true, responseTimeout: RESPONSE_TIMEOUT });
 		savedPath = await waitForDownload(session.downloadDir);
 		content = readSavedPage(savedPath);
 		return savedPath.endsWith(".html") ? undefined : "saved file is not an .html page: " + savedPath;
+	});
+
+	await test("the caller is answered once the save is dispatched", async () => {
+		return response && response.noResponse
+			? "no answer within " + RESPONSE_TIMEOUT + "ms: " + response.detail
+			: undefined;
 	});
 
 	await test("the saved page is self-contained", async () => {
