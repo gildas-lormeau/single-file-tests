@@ -48,6 +48,12 @@
 
 	<iframe id="frame" src="rich-frame.html" width="200" height="80" title="fixture frame"></iframe>
 
+	<!-- sandboxed, so it is an opaque origin and the page cannot reach its document: the only
+	     way the saved copy says RENDERED is if the frame answered for itself. Re-parsing the
+	     srcdoc attribute instead, which is all a parent can do here, yields RAW -->
+	<iframe id="sandboxed-frame" sandbox="allow-scripts" width="200" height="80" title="sandboxed fixture frame"
+		srcdoc="<p id='sandboxed-text'>SANDBOXED_FRAME_RAW</p><script>document.getElementById('sandboxed-text').textContent='SANDBOXED_FRAME_RENDERED'</script>"></iframe>
+
 	<!-- pushed far below the fold so a lazy image is genuinely not loaded at save time -->
 	<div id="spacer"></div>
 	<img id="lazy" src="lazy.png" loading="lazy" alt="lazy photo" width="24" height="24">

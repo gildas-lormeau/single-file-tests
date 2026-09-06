@@ -189,9 +189,16 @@ about something else, too easy to grade a save on.
 
 `fixtures/pages/rich.html` is the one to reach for when the subject is fidelity. It
 carries an `@import` a level down, a webfont, a shadow root with an adopted stylesheet, a
-canvas holding pixels no markup describes, a same-origin frame, `srcset` and `<picture>`,
-a background image reached through a CSS custom property, and a lazy image three thousand
-pixels below the fold. Each of those is a thing SingleFile has to do real work to keep.
+canvas holding pixels no markup describes, a same-origin frame, a sandboxed `srcdoc` frame
+the page cannot reach into, `srcset` and `<picture>`, a background image reached through a
+CSS custom property, and a lazy image three thousand pixels below the fold. Each of those
+is a thing SingleFile has to do real work to keep.
+
+The sandboxed frame grades the frame-tree protocol rather than the saver. Its origin is
+opaque, so `contentDocument` is null and the only source the parent has on its own is the
+`srcdoc` attribute, which no script has run against. The frame's inline script rewrites a
+marker, so the saved file reads `SANDBOXED_FRAME_RENDERED` when the frame answered for
+itself and `SANDBOXED_FRAME_RAW` when the parent fell back to re-parsing srcdoc.
 
 The server also answers two request shapes that save writing a fixture per case:
 
