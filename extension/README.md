@@ -92,6 +92,16 @@ native menu that swallows the keys, and `<option>` elements are rejected as poin
 origins. Import sidesteps the widget instead of faking a gesture, and needs no test-only
 code in the extension.
 
+Since Firefox 156 an extension page is a privileged browsing context, and with
+`-remote-allow-system-access` only navigate, reload, close, `getTree` and script
+evaluation accept one: `setViewport`, `locateNodes`, `input.performActions` and
+`input.setFiles` answer "The command does not support browsing contexts in privileged
+scope". The helpers try the real command first and, once a page has been refused, drive it
+through its own scripts: a `click()` on the element, an emptied value plus a `change`
+event for the permission lists, a `File` built in the page for the import. Chromium, older
+Firefox and web pages keep real input, so a spec stays at level 2 in its own eyes; on those
+Firefox builds it is level 3 underneath, and `session.mjs` says so.
+
 **Level 3 — evaluating in an extension page.** Last resort. Mark the spec, because at that
 point the test knows about the implementation.
 

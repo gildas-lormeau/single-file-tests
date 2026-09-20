@@ -40,6 +40,16 @@ const TAB = String.fromCharCode(0xE004);
 const CONTROL = String.fromCharCode(0xE009);
 const META = String.fromCharCode(0xE03D);
 const SELECT_ALL_MODIFIER = process.platform == "darwin" ? META : CONTROL;
+// Firefox 156 treats an extension page as a privileged browsing context (Bug 2055034,
+// remote/shared/BrowsingContextUtils.sys.mjs isPrivilegedContext: any page outside a web
+// or file content process). With -remote-allow-system-access, navigate, reload, close,
+// getTree and script evaluation accept such a context; setViewport, locateNodes,
+// input.performActions and input.setFiles answer "The command does not support browsing
+// contexts in privileged scope". The level-2 helpers below try the real command first and,
+// once a context has been refused, drive that page through its own scripts instead. That
+// is a level-3 path taken only on those builds: Chromium, older Firefox and web pages keep
+// real input. Measured 2026-09-20: the 1.26.0 gate ran on Firefox 155, the next one met 156.
+const PRIVILEGED_SCOPE_REFUSAL = /privileged scope/;
 
 // `release` tests the zip build-extension.sh produces instead of the working tree; see
 // release-build.mjs for why the two are not the same thing.
@@ -69,6 +79,8 @@ async function openSession(browserName, { headless = true, release = false } = {
 		throw error;
 	}
 	const { session } = browser;
+	// contexts Firefox 156+ refused a level-2 command on, driven by script from then on
+	const privilegedContexts = new Set();
 
 	let singlefileOrigin;
 	try {
@@ -128,7 +140,22 @@ async function openSession(browserName, { headless = true, release = false } = {
 	}
 
 	async function setViewport(context, width, height) {
-		await session.send("browsingContext.setViewport", { context, viewport: { width, height } });
+		if (privilegedContexts.has(context)) {
+			return;
+		}
+		try {
+			await session.send("browsingContext.setViewport", { context, viewport: { width, height } });
+		} catch (error) {
+			if (!refusedAsPrivileged(error)) {
+				throw error;
+			}
+			// the page is driven by script from here on, and a script needs no viewport
+			privilegedContexts.add(context);
+		}
+	}
+
+	function refusedAsPrivileged(error) {
+		return PRIVILEGED_SCOPE_REFUSAL.test(error.message);
 	}
 
 	// Aim input at an element rather than at coordinates: locateNodes gives a node
@@ -146,21 +173,33 @@ async function openSession(browserName, { headless = true, release = false } = {
 	}
 
 	async function click(context, selector) {
-		const sharedId = await locate(context, selector);
-		const origin = { type: "element", element: { sharedId } };
-		await session.send("input.performActions", {
-			context,
-			actions: [{
-				type: "pointer",
-				id: "mouse",
-				parameters: { pointerType: "mouse" },
-				actions: [
-					{ type: "pointerMove", x: 0, y: 0, origin },
-					{ type: "pointerDown", button: 0 },
-					{ type: "pointerUp", button: 0 }
-				]
-			}]
-		});
+		if (!privilegedContexts.has(context)) {
+			try {
+				const sharedId = await locate(context, selector);
+				const origin = { type: "element", element: { sharedId } };
+				await session.send("input.performActions", {
+					context,
+					actions: [{
+						type: "pointer",
+						id: "mouse",
+						parameters: { pointerType: "mouse" },
+						actions: [
+							{ type: "pointerMove", x: 0, y: 0, origin },
+							{ type: "pointerDown", button: 0 },
+							{ type: "pointerUp", button: 0 }
+						]
+					}]
+				});
+				return;
+			} catch (error) {
+				if (!refusedAsPrivileged(error)) {
+					throw error;
+				}
+				privilegedContexts.add(context);
+			}
+		}
+		await evaluate(context, "(() => { const element = document.querySelector(" + JSON.stringify(selector) + "); " +
+			"if (!element) { throw new Error(" + JSON.stringify("no element matched " + selector) + "); } element.click(); })()");
 	}
 
 	async function pressKey(context, key, times = 1) {
@@ -199,11 +238,19 @@ async function openSession(browserName, { headless = true, release = false } = {
 		const context = await openTab(singlefileURL(OPTIONS_PAGE));
 		await setViewport(context, OPTIONS_VIEWPORT.width, OPTIONS_VIEWPORT.height);
 		await click(context, "#expandAllButton");
-		for (const selector of PERMISSION_INPUTS) {
-			await click(context, selector);
-			await pressChord(context, SELECT_ALL_MODIFIER, "a");
-			await pressKey(context, BACKSPACE);
-			await pressKey(context, TAB);
+		if (privilegedContexts.has(context)) {
+			// what the select-all, backspace and tab sequence amounts to: an emptied value
+			// and the change event the page persists on
+			await evaluate(context, "(() => { for (const selector of " + JSON.stringify(PERMISSION_INPUTS) + ") { " +
+				"const input = document.querySelector(selector); input.value = \"\"; " +
+				"input.dispatchEvent(new Event(\"change\", { bubbles: true })); } })()");
+		} else {
+			for (const selector of PERMISSION_INPUTS) {
+				await click(context, selector);
+				await pressChord(context, SELECT_ALL_MODIFIER, "a");
+				await pressKey(context, BACKSPACE);
+				await pressKey(context, TAB);
+			}
 		}
 		await new Promise(resolve => setTimeout(resolve, 750));
 		return context;
@@ -223,21 +270,30 @@ async function openSession(browserName, { headless = true, release = false } = {
 		const settingsDir = mkdtempSync(join(tmpdir(), "sf-fn-settings-"));
 		guardDirectory(settingsDir);
 		const settingsPath = join(settingsDir, "settings.json");
-		writeFileSync(settingsPath, JSON.stringify({ profiles: { [profileName]: profile }, rules: [] }));
+		const settings = JSON.stringify({ profiles: { [profileName]: profile }, rules: [] });
+		writeFileSync(settingsPath, settings);
 		// the click is what registers the file input's change handler
 		await click(context, "#importButton");
-		const { nodes } = await session.send("browsingContext.locateNodes", {
-			context,
-			locator: { type: "css", value: "#fileInput" }
-		});
-		if (!nodes || !nodes.length) {
-			throw new Error("the options page has no #fileInput to import through");
+		if (privilegedContexts.has(context)) {
+			// the handler reads fileInput.files[0], and a File built in the page is one
+			await evaluate(context, "(() => { const input = document.querySelector(\"#fileInput\"); " +
+				"const transfer = new DataTransfer(); " +
+				"transfer.items.add(new File([" + JSON.stringify(settings) + "], \"settings.json\", { type: \"application/json\" })); " +
+				"input.files = transfer.files; input.dispatchEvent(new Event(\"change\", { bubbles: true })); })()");
+		} else {
+			const { nodes } = await session.send("browsingContext.locateNodes", {
+				context,
+				locator: { type: "css", value: "#fileInput" }
+			});
+			if (!nodes || !nodes.length) {
+				throw new Error("the options page has no #fileInput to import through");
+			}
+			await session.send("input.setFiles", {
+				context,
+				element: { sharedId: nodes[0].sharedId },
+				files: [settingsPath]
+			});
 		}
-		await session.send("input.setFiles", {
-			context,
-			element: { sharedId: nodes[0].sharedId },
-			files: [settingsPath]
-		});
 		// the handler reads the file and writes storage asynchronously
 		await new Promise(resolve => setTimeout(resolve, 2500));
 		// the directory, not just the file inside it: this runs once per option change
