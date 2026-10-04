@@ -132,6 +132,18 @@ export const ARCHIVE_FIXTURES = [
 	}
 ];
 
+// Pages whose stylesheet is pulled in by an @import in a <style> element. Firefox applied it
+// empty in a self-extracting archive: the display parsed the page with DOMParser before showing
+// it, and in Firefox that parse leaves an empty sheet behind for the imported URL, which the
+// @import of the displayed page then gets. A <link> to the same URL was not affected. The page
+// with a script is displayed by document.write instead of by swapping the document element in
+// place, and both paths parsed first.
+export const IMPORTED_COLOR = "rgb(1, 2, 3)";
+export const IMPORT_FIXTURES = [
+	{ name: "archive-style-import.html", script: false },
+	{ name: "archive-style-import-script.html", script: true }
+];
+
 // The polyglot faces (doc/singlefile-archive.md §2). Every archive has the ZIP face; the
 // HTML, PDF and PNG faces are enabled independently, and the point of these fixtures is
 // the combinations — the PNG face owns both ends of the file, the PDF face has to land in

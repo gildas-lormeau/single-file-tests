@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { configure } from "../../../single-file-core/vendor/zip/zip.js";
 import { process as processPage } from "../../../single-file-core/processors/compression/compression.js";
-import { FIXTURES_DIR, PAYLOADS, CONTAINERS, buildParserPage, parserFixtureName, TERMINATOR_FIXTURES, MARKER_TEXT, mulberry32, ARCHIVE_FIXTURES, FACE_FIXTURES, renamedFixtureName } from "../lib/fixtures-def.js";
+import { FIXTURES_DIR, PAYLOADS, CONTAINERS, buildParserPage, parserFixtureName, TERMINATOR_FIXTURES, MARKER_TEXT, mulberry32, ARCHIVE_FIXTURES, IMPORT_FIXTURES, IMPORTED_COLOR, FACE_FIXTURES, renamedFixtureName } from "../lib/fixtures-def.js";
 import { buildPNG, buildPDF } from "../lib/face-payloads.js";
 
 const CORE_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "single-file-core");
@@ -40,6 +40,13 @@ async function buildArchiveFixtures() {
 			continue;
 		}
 		await buildArchive(name, pageAround(payload, name), { disableCompression: true });
+	}
+	for (const { name, script } of IMPORT_FIXTURES) {
+		const content = "<!DOCTYPE html><html><head><meta charset=utf-8><title>" + name + "</title>" +
+			"<style>@import url(stylesheet_0.css);</style></head>" +
+			`<body><h1 id=marker>${MARKER_TEXT}</h1>` + (script ? "<script>document.title += \" \";</script>" : "") + "</body></html>";
+		const stylesheet = { name: "stylesheet_0.css", content: `#marker{color:${IMPORTED_COLOR}}`, extension: ".css", url: "https://example.com/style.css" };
+		await buildArchive(name, content, { resources: { stylesheets: [stylesheet] } });
 	}
 	const base = readFileSync(join(FIXTURES_DIR, "archive-base.html"));
 	const zipStart = base.indexOf(Buffer.from([0x50, 0x4B, 0x03, 0x04]));
