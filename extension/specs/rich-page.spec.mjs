@@ -22,6 +22,9 @@ const SANDBOXED_FRAME_RENDERED = "SANDBOXED_FRAME_RENDERED";
 const SHADOW_MARKER = "SHADOW_DOM_MARKER";
 const DATA_IMAGE = /data:image\/(png|svg\+xml);base64,/;
 const DATA_FONT = /url\(["']?data:(font|application)\/[^;]+;base64,/;
+// base64 holds neither a space nor a comma, so a value matching this is one candidate and nothing else
+const SRCSET_ATTRIBUTE = /\ssrcset=["']([^"']*)["']/;
+const EMBEDDED_CANDIDATE = /^data:image\/[\w+]+;base64,[A-Za-z0-9+/=]+ \d+(?:\.\d+)?[wx]$/;
 
 export const name = "rich-page";
 export const level = 1;
@@ -139,7 +142,11 @@ export async function run({ session, fixtures, test }) {
 		return DATA_IMAGE.test(canvas) ? undefined : "the canvas carries no embedded bitmap";
 	});
 
-	await test("srcset is resolved to a single embedded image", () => {
+	// Since core 1.6.32 the candidate the browser displayed keeps its descriptor: a "2x" or
+	// "240w" candidate written as a bare src is drawn at its pixel size by a layout reading the
+	// intrinsic width, so it stays a one-entry srcset. Any second candidate, or one left as a
+	// URL, is the failure this grades.
+	await test("srcset is resolved to the displayed candidate, embedded", () => {
 		const problems = [];
 		["responsive", "picture-image"].forEach(id => {
 			const image = elementWithId(content, id);
@@ -147,8 +154,11 @@ export async function run({ session, fixtures, test }) {
 				problems.push(id + " is gone from the saved page");
 			} else if (!DATA_IMAGE.test(image)) {
 				problems.push(id + " was not embedded");
-			} else if (/srcset=["']?\w/.test(image)) {
-				problems.push(id + " still carries an unresolved srcset");
+			} else {
+				const srcset = SRCSET_ATTRIBUTE.exec(image);
+				if (srcset && !EMBEDDED_CANDIDATE.test(srcset[1])) {
+					problems.push(id + " carries a srcset that is not one embedded candidate: " + srcset[1].slice(0, 60));
+				}
 			}
 		});
 		return problems.join("; ") || undefined;
