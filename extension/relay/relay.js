@@ -33,7 +33,12 @@ async function start() {
 	}
 }
 
+// An MV3 service worker is stopped after 30 seconds without an extension event or API call,
+// and a fetch that is waiting does not count: a spec that sent nothing for that long came
+// back to a relay that was gone, and every later dispatch timed out. The bridge holds a
+// poll for 20 seconds at most, so one API call per poll keeps the worker alive.
 async function poll() {
+	chrome.runtime.getPlatformInfo(() => void chrome.runtime.lastError);
 	const response = await fetch(BRIDGE_URL + "command");
 	if (response.status == IDLE_RESPONSE) {
 		return;

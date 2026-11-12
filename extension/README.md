@@ -154,6 +154,38 @@ test's file. The lag is silent until some assertion happens to care which page i
 one dispatch with no `waitForDownload` cost seven failures three specs later, all of them
 reported against innocent code.
 
+## Auto-save
+
+Three specs: `autosave` (when a page is saved and how many times, per mode), `autosave-discard`
+(the discard mode and the MV3 store of hidden-tab captures, level 3) and `autosave-navigation`
+(going back, and which profile a page left for another site is saved with). Their helpers
+are in `expect/autosave.mjs`. They grade the number of files per page title, never the
+content.
+
+Auto-save is switched on per tab with the external `enableAutoSave` message, on a page that
+is not under test, and the page under test is then loaded in that tab: the content script
+reads the setting when a page starts loading.
+
+What cost time when these were written, 2026-11-12:
+
+- **A relay left idle for 30 seconds was gone.** Chromium stops an MV3 service worker after
+  30 seconds without an extension event or API call, and a pending `fetch` does not count.
+  The relay now calls an extension API on every poll. Before that, one long wait in a spec
+  made every later dispatch fail with "relay did not answer".
+- **A discarded tab is a new tab on Chromium** (157: new tab id, new browsing context). The
+  context the spec opened no longer closes it, `closeTab` swallows the error, and the tab is
+  reloaded when it becomes active again. Close such a page with `closeTabsShowing`, and
+  before the tab in front of it.
+- **Reading the store hides the tab in front**, because it opens an extension page. If that
+  tab has auto-save in discard mode its capture is stored, rightly. So the store check only
+  counts the records of the page under test. Both points together looked exactly like a
+  leak in the store and were not one.
+- **The specs were checked against older builds**, with `SF_EXTENSION_FIREFOX` and
+  `SF_EXTENSION_CHROMIUM` pointing at a `git archive` of the commit before each fix: 8 of
+  the first 13 tests fail on Firefox before `25e79e9d`, 5 on Chromium before `c22f59c`, the
+  double save on tab close fails at `25e79e9d`, the marker test before `5632d1b2`. The
+  Chromium `pagehide` change is NOT discriminated: the build before it also passes.
+
 ## Known failures
 
 A test may assert the behaviour SingleFile *should* have and name the defect that stops

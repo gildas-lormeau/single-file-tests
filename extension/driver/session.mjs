@@ -110,7 +110,11 @@ async function openSession(browserName, { headless = true, release = false } = {
 			// SingleFile identifies the caller by this id when granting capture permission
 			relayId: relay && relay.id,
 			openTab,
+			navigate,
+			back,
+			activate,
 			closeTab,
+			closeTabsShowing,
 			setViewport,
 			// level 2: real pointer and keyboard input aimed at a real element
 			click,
@@ -132,11 +136,40 @@ async function openSession(browserName, { headless = true, release = false } = {
 		return context;
 	}
 
+	// Load another page in a tab that is already open, the way a click on a link does. A
+	// caller that wants to act while the page is still loading passes wait "interactive".
+	async function navigate(context, url, { wait = "complete" } = {}) {
+		await session.send("browsingContext.navigate", { context, url, wait }, 30000);
+	}
+
+	// The back button.
+	async function back(context) {
+		await session.send("browsingContext.traverseHistory", { context, delta: -1 });
+	}
+
+	// Bring a tab back to the front, which hides the one that was there.
+	async function activate(context) {
+		await session.send("browsingContext.activate", { context });
+	}
+
 	// A headless window is short, and a pointer aimed at an element below the fold lands
 	// on whatever is on top instead of erroring. Giving a long page a viewport tall enough
 	// to hold it is the reliable way to keep controls clickable.
 	async function closeTab(context) {
 		await session.send("browsingContext.close", { context }).catch(() => undefined);
+	}
+
+	// Close every tab whose URL contains the given text. A discarded tab is a new tab to
+	// Chromium (new tab id, new browsing context), so the context a spec opened the page with
+	// no longer closes it, and closeTab swallows that. A discarded tab left open is reloaded
+	// as soon as it becomes the active one.
+	async function closeTabsShowing(urlPart) {
+		const { contexts } = await session.send("browsingContext.getTree", { maxDepth: 0 });
+		for (const { context, url } of contexts) {
+			if (url.includes(urlPart)) {
+				await closeTab(context);
+			}
+		}
 	}
 
 	async function setViewport(context, width, height) {
@@ -264,13 +297,16 @@ async function openSession(browserName, { headless = true, release = false } = {
 	// This exists because a <select> cannot be driven by synthetic input on macOS — the
 	// click opens a native menu that swallows the keys. Import sidesteps the widget
 	// question entirely and works for every option, not just that one.
-	async function importSettings(profile, { profileName = "__Default_Settings__" } = {}) {
+	//
+	// `profiles` adds named profiles next to the default one and `rules` maps URLs to
+	// them, for the tests about which profile a page is saved with.
+	async function importSettings(profile, { profileName = "__Default_Settings__", profiles = {}, rules = [] } = {}) {
 		const context = await openTab(singlefileURL(OPTIONS_PAGE));
 		await setViewport(context, OPTIONS_VIEWPORT.width, OPTIONS_VIEWPORT.height);
 		const settingsDir = mkdtempSync(join(tmpdir(), "sf-fn-settings-"));
 		guardDirectory(settingsDir);
 		const settingsPath = join(settingsDir, "settings.json");
-		const settings = JSON.stringify({ profiles: { [profileName]: profile }, rules: [] });
+		const settings = JSON.stringify({ profiles: { [profileName]: profile, ...profiles }, rules });
 		writeFileSync(settingsPath, settings);
 		// the click is what registers the file input's change handler
 		await click(context, "#importButton");
