@@ -3,6 +3,7 @@
 	"version": "1.0.0",
 	"description": "Functional and format tests for SingleFile: the browser extension, and the self-extracting archive format",
 	"author": "Gildas Lormeau",
+	"license": "AGPL-3.0-or-later",
 	"private": true,
 	"type": "module",
 	"scripts": {
