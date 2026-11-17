@@ -15,6 +15,7 @@
 		"test-extension-chromium": "node extension/run.mjs --browser=chromium",
 		"test-extension-firefox": "node extension/run.mjs --browser=firefox",
 		"test-extension-release": "node extension/run.mjs --release",
+		"verify": "node extension/verify.mjs",
 		"test-release": "npm run test-extension-release && npm run test-format",
 		"lint": "eslint extension format"
 	},

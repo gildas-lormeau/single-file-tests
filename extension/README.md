@@ -15,6 +15,14 @@ The extensions under test are the sibling checkouts: `single-file` (MV2, Firefox
 `single-file-mv3` (MV3, Chromium). Override with `SF_EXTENSION_FIREFOX` and
 `SF_EXTENSION_CHROMIUM`. Both must be built (`./build.sh`) before running.
 
+## Trying a change by hand
+
+`node extension/verify.mjs --url=<page>` installs the working tree of the extension, saves the page
+and returns the saved file with screenshots of the page and of the saved file. It asserts nothing:
+it is the manual check made repeatable, for a page and options chosen on the spot. `--select` saves
+a selection, `--action=edit-and-save-page` opens the annotation editor, `--options` sets options
+first, `--browser=both` runs the two browsers. The usage is at the top of the script.
+
 ## Before a release
 
 `npm run test-release` is the gate. It runs the extension suite against the **packaged**
