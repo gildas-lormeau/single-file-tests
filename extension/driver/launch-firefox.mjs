@@ -1,7 +1,10 @@
 // Firefox speaks BiDi natively on --remote-debugging-port. Two things are easy to
-// miss: -remote-allow-system-access (single dash) is what allows navigating to and
-// evaluating in moz-extension: pages, and the moz-extension UUID is random per
-// profile, so it has to be pinned in the profile before first launch.
+// miss: system access is what allows navigating to and evaluating in moz-extension:
+// pages, and the moz-extension UUID is random per profile, so it has to be pinned in
+// the profile before first launch. System access was granted by the command line
+// argument -remote-allow-system-access (single dash) until Firefox 160, which ignores
+// it and reads the environment variable MOZ_REMOTE_ALLOW_SYSTEM_ACCESS instead: both
+// are given, so the suite runs on either side of that change.
 
 import { spawn } from "node:child_process";
 import { guardProcess, releaseProcess, guardDirectory, releaseDirectory } from "./process-guard.mjs";
@@ -58,7 +61,7 @@ async function launchFirefox({ singlefileId, downloadDir, headless = true }) {
 	}
 	const browserProcess = spawn(binary, args, {
 		stdio: ["ignore", "ignore", "pipe"],
-		env: { ...process.env, MOZ_NO_REMOTE: "1" }
+		env: { ...process.env, MOZ_NO_REMOTE: "1", MOZ_REMOTE_ALLOW_SYSTEM_ACCESS: "1" }
 	});
 	// only ever this pid: the machine running the suite is also someone's desktop, and
 	// their own Firefox is not the harness's to kill
