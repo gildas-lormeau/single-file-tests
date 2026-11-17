@@ -155,8 +155,16 @@ async function openSession(browserName, { headless = true, release = false } = {
 	// A headless window is short, and a pointer aimed at an element below the fold lands
 	// on whatever is on top instead of erroring. Giving a long page a viewport tall enough
 	// to hold it is the reliable way to keep controls clickable.
+	// A close that fails is not an error for the caller: a discarded tab is a new tab to
+	// Chromium, and the context a spec holds no longer closes it. It is printed, though. A tab
+	// that stays open is never unloaded, and an auto-save test waiting for the save on unload
+	// then reports "saved 0 time(s)" with nothing to tell it from a save the extension lost:
+	// that is what three auto-save tests did in Firefox on 2026-11-17, once here and once on
+	// CI, and what 222 traced unloads in 9 passes could not reproduce.
 	async function closeTab(context) {
-		await session.send("browsingContext.close", { context }).catch(() => undefined);
+		await session.send("browsingContext.close", { context }).catch(error =>
+			// eslint-disable-next-line no-console
+			console.log("        note: closing a tab failed (" + error.message + ")"));
 	}
 
 	// Close every tab whose URL contains the given text. A discarded tab is a new tab to
