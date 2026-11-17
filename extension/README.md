@@ -244,6 +244,13 @@ the page cannot reach into, `srcset` and `<picture>`, a background image reached
 CSS custom property, and a lazy image three thousand pixels below the fold. Each of those
 is a thing SingleFile has to do real work to keep.
 
+`fixtures/pages/shadow-selection.html` is the page of the `selection-in-shadow-root` spec: a
+component whose shadow root holds the paragraph to select, open by default, closed with
+`?mode=closed`, inside the shadow root of another component with `?mode=nested`. The spec
+selects with a real mouse drag, because the browsers do not show a script the same thing for
+such a selection (Chromium hides it from the classic selection API) and a range written by a
+script is handed back as written in both.
+
 The sandboxed frame grades the frame-tree protocol rather than the saver. Its origin is
 opaque, so `contentDocument` is null and the only source the parent has on its own is the
 `srcdoc` attribute, which no script has run against. The frame's inline script rewrites a

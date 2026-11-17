@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>selection in a shadow root</title>
+</head>
+<body>
+<p>LIGHT_BEFORE</p>
+<div id="mount"></div>
+<p>LIGHT_AFTER</p>
+<script>
+// ?mode=closed makes the shadow root closed, ?mode=nested puts the component in the shadow root of
+// another one. The paragraph to select is reached through window.targetElement, which works for a
+// closed shadow root too.
+const mode = new URLSearchParams(location.search).get("mode");
+const shadowRoots = [];
+customElements.define("x-box", class extends HTMLElement {
+	constructor() {
+		super();
+		const shadowRoot = this.attachShadow({ mode: mode == "closed" ? "closed" : "open" });
+		shadowRoot.innerHTML = "<style>p { color: rgb(0, 128, 0) }</style><p>SHADOW_FIRST</p><p id=\"target\">SHADOW_SELECTED</p><slot></slot><p>SHADOW_LAST</p>";
+		shadowRoots.push(shadowRoot);
+		window.targetElement = shadowRoot.querySelector("#target");
+	}
+});
+customElements.define("x-outer", class extends HTMLElement {
+	constructor() {
+		super();
+		const shadowRoot = this.attachShadow({ mode: "open" });
+		shadowRoot.innerHTML = "<p>OUTER_FIRST</p><x-box><span>SLOTTED</span></x-box><p>OUTER_LAST</p>";
+		shadowRoots.push(shadowRoot);
+	}
+});
+document.querySelector("#mount").innerHTML = mode == "nested" ? "<x-outer></x-outer>" : "<x-box><span>SLOTTED</span></x-box>";
+// the attribute SingleFile marks the selection with, counted in the page and in its shadow roots
+window.countSelectionMarks = () => shadowRoots.reduce((count, shadowRoot) => count + shadowRoot.querySelectorAll("[data-single-file-selected-content]").length,
+	document.querySelectorAll("[data-single-file-selected-content]").length);
+</script>
+</body>
+</html>
