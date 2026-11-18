@@ -70,7 +70,8 @@ SingleFile and calls `runtime.sendMessage(singlefileId, …)`, which SingleFile 
 handles in `src/core/bg/external-messages.js`. Nothing is injected into SingleFile, and
 the harness exercises the same action strings the menu items use: `save-page`,
 `edit-and-save-page`, `save-selected-links`, `save-selected-content`,
-`save-selected-tabs`, `save-unpinned-tabs`, `save-all-tabs`, plus `capture-page`.
+`save-selected-tabs`, `save-unpinned-tabs`, `save-all-tabs`, the three `save-*-tabs-in-archive`
+actions, plus `capture-page`.
 
 `capture-page` is the only one that returns a value, so it is the only caller that needs
 `dispatch(message, { expectResponse: true })`. It is also gated by a permission prompt:
