@@ -155,14 +155,20 @@ async function openSession(browserName, { headless = true, release = false } = {
 	// A headless window is short, and a pointer aimed at an element below the fold lands
 	// on whatever is on top instead of erroring. Giving a long page a viewport tall enough
 	// to hold it is the reliable way to keep controls clickable.
+	// The tab is closed the way a click on its close button closes it: the browser asks the
+	// page first (beforeunload) and removes the tab afterwards. Without promptUnload the tab
+	// is removed at once, which no user can do, and SingleFile then has nothing but the
+	// unload event to save the page from. Firefox aborts the scripts still running in a
+	// process it shuts down, and the process of a tab that was alone in it is shut down when
+	// the tab closes: the save on unload was cut that way in about one close out of five on
+	// the Linux runners (2026-11-18), and reported as "saved 0 time(s)".
+	//
 	// A close that fails is not an error for the caller: a discarded tab is a new tab to
-	// Chromium, and the context a spec holds no longer closes it. It is printed, though. A tab
-	// that stays open is never unloaded, and an auto-save test waiting for the save on unload
-	// then reports "saved 0 time(s)" with nothing to tell it from a save the extension lost:
-	// that is what three auto-save tests did in Firefox on 2026-11-17, once here and once on
-	// CI, and what 222 traced unloads in 9 passes could not reproduce.
+	// Chromium, and the context a spec holds no longer closes it. It is printed, though,
+	// because a tab that stays open is never unloaded and an auto-save test waiting for the
+	// save on unload then fails with nothing to tell why.
 	async function closeTab(context) {
-		await session.send("browsingContext.close", { context }).catch(error =>
+		await session.send("browsingContext.close", { context, promptUnload: true }).catch(error =>
 			// eslint-disable-next-line no-console
 			console.log("        note: closing a tab failed (" + error.message + ")"));
 	}

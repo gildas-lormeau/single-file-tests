@@ -97,6 +97,25 @@ export async function run({ session, fixtures, test }) {
 		return names.problem || (afterClose.problem && "closing the tab on the next page: " + afterClose.problem);
 	});
 
+	// SingleFile captures the page when the browser asks it whether it may unload, which is
+	// before it is known that the page goes away, and saves the capture once it did. This is
+	// the case where it did not: the page must not be saved for having been asked.
+	await test("save on unload only: a navigation that leaves the page in place does not save it, and closing its tab saves it once", async () => {
+		const page = await openAutoSavedPage("unload-stay-after-navigation");
+		await sleep(EARLY_LEAVE_DELAY);
+		await session.evaluate(page.context, "location.href = " + JSON.stringify(fixtures.noContentURL()) + "; undefined");
+		const before = await savedFiles({});
+		const stillThere = await session.evaluate(page.context, "document.title");
+		if (stillThere != page.title) {
+			return "the page did not stay in place, the tab shows " + JSON.stringify(stillThere);
+		}
+		if (before.problem) {
+			return "after the navigation that went nowhere: " + before.problem;
+		}
+		await session.closeTab(page.context);
+		return (await savedFiles({ [page.title]: 1 })).problem;
+	});
+
 	await configure({ ...MODES.unload, autoSaveRemove: true });
 
 	await test("save on unload and on tab removed: closing the tab saves the page once", async () => {

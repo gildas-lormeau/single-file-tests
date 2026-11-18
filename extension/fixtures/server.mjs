@@ -17,6 +17,9 @@ const CONTENT_TYPES = {
 };
 // pages whose title has to be chosen by the test rather than baked into a file
 const TITLED_PATH = "/titled";
+// a navigation that goes nowhere: the browser asks the page whether it may unload, gets this
+// answer and leaves the page where it is, as it does for a link that turns into a download
+const NO_CONTENT_PATH = "/no-content";
 
 export { startFixtureServer };
 
@@ -35,6 +38,10 @@ function startFixtureServer() {
 		const extraHeaders = {};
 		if (url.searchParams.has("csp")) {
 			extraHeaders["content-security-policy"] = url.searchParams.get("csp");
+		}
+		if (url.pathname == NO_CONTENT_PATH) {
+			response.writeHead(204).end();
+			return;
 		}
 		if (url.pathname == TITLED_PATH) {
 			response.writeHead(200, { ...extraHeaders, "content-type": CONTENT_TYPES[".html"] });
@@ -68,6 +75,7 @@ function startFixtureServer() {
 				// a page whose <title> is exactly what the caller asked for, which is what
 				// the default filename template is built from
 				titledURL: title => origin + TITLED_PATH + "?title=" + encodeURIComponent(title),
+				noContentURL: () => origin + NO_CONTENT_PATH,
 				close: () => new Promise(done => server.close(done))
 			});
 		});
