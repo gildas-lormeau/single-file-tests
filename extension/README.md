@@ -252,6 +252,12 @@ selects with a real mouse drag, because the browsers do not show a script the sa
 such a selection (Chromium hides it from the classic selection API) and a range written by a
 script is handed back as written in both.
 
+`fixtures/pages/bare-text-selection.html` is the page of the `selection-bare-text` spec: text
+written directly in `<body>` and in a `<div>`, in no element of its own, around the elements to
+select, the way the Lua manual writes the description of its functions (SingleFile#2066). The
+ranges are written by a script of the page, which is enough in the light DOM. The spec fails on
+the extensions up to 1.39.0, where that text was saved with every selection.
+
 The sandboxed frame grades the frame-tree protocol rather than the saver. Its origin is
 opaque, so `contentDocument` is null and the only source the parent has on its own is the
 `srcdoc` attribute, which no script has run against. The frame's inline script rewrites a

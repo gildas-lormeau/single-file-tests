@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Selection next to bare text</title>
+</head>
+<body>
+<h1>Selection next to bare text</h1>
+<p id="paragraph">PARAGRAPH_SELECTED and the rest of the paragraph
+<p>
+<hr><h3>first</h3>
+BARE_FIRST
+<p>
+<hr><h3>second</h3>
+BARE_SECOND
+<div id="mixed">MIXED_BEFORE <b id="bold">BOLD_SELECTED</b> MIXED_AFTER <a href="#">LINK_UNSELECTED</a></div>
+<p>
+<hr><h3 id="heading">HEADING_SELECTED</h3>
+BARE_SELECTED
+<hr>
+BARE_LAST
+<script>
+// The descriptions are written as the Lua manual writes them: the <hr> closes the paragraph, so the
+// heading and the text after it are children of <body>, and the text is in no element of its own.
+const SELECTIONS = {
+	// inside a paragraph, as in the report
+	paragraph: () => {
+		const textNode = document.querySelector("#paragraph").firstChild;
+		return [textNode, 0, textNode, "PARAGRAPH_SELECTED".length];
+	},
+	// inside an inline element whose parent holds text of its own
+	bold: () => {
+		const textNode = document.querySelector("#bold").firstChild;
+		return [textNode, 0, textNode, textNode.data.length];
+	},
+	// from a heading to the end of the bare text written after it
+	bare: () => {
+		const headingElement = document.querySelector("#heading");
+		const textNode = headingElement.nextSibling;
+		return [headingElement.firstChild, 0, textNode, textNode.data.length];
+	}
+};
+window.selectFixtureRange = name => {
+	const [startContainer, startOffset, endContainer, endOffset] = SELECTIONS[name]();
+	const range = document.createRange();
+	range.setStart(startContainer, startOffset);
+	range.setEnd(endContainer, endOffset);
+	getSelection().removeAllRanges();
+	getSelection().addRange(range);
+	return getSelection().toString();
+};
+// the two attributes SingleFile marks a selection with
+window.countSelectionMarks = () => document.querySelectorAll("[data-single-file-selected-content], [data-single-file-selected-text]").length;
+</script>
+</body>
+</html>
