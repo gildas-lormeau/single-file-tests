@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Selected links</title>
+</head>
+<body>
+<h1>Selected links</h1>
+<!-- Each link is alone in its item, as on the DokuWiki index of SingleFile#2068: a selection that
+starts at the first link starts inside its text, there is nothing else on the line to start from. -->
+<ul>
+<li><div> <a id="first" href="simple.html?link=first">LINK_FIRST</a></div></li>
+<li><div> <a id="second" href="simple.html?link=second#fragment">LINK_SECOND</a></div></li>
+<li><div> <a id="third" href="simple.html?link=third">LINK_THIRD</a></div></li>
+<li><div> <a id="fourth" href="simple.html?link=fourth">LINK_FOURTH</a></div></li>
+</ul>
+<script>
+const text = id => document.getElementById(id).firstChild;
+const SELECTIONS = {
+	// from the first character of the first link, as in the report
+	inside: () => [text("first"), 0, text("third"), 4],
+	// from the space written before the first link
+	before: () => [document.getElementById("first").previousSibling, 0, text("third"), 4],
+	// a part of the text of one link
+	one: () => [text("second"), 2, text("second"), 8],
+	// from the very end of the text of the first link: none of its characters is selected
+	end: () => [text("first"), text("first").data.length, text("third"), 4]
+};
+window.selectFixtureRange = name => {
+	const [startContainer, startOffset, endContainer, endOffset] = SELECTIONS[name]();
+	const range = document.createRange();
+	range.setStart(startContainer, startOffset);
+	range.setEnd(endContainer, endOffset);
+	getSelection().removeAllRanges();
+	getSelection().addRange(range);
+	return getSelection().toString();
+};
+</script>
+</body>
+</html>

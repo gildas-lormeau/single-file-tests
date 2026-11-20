@@ -258,6 +258,11 @@ select, the way the Lua manual writes the description of its functions (SingleFi
 ranges are written by a script of the page, which is enough in the light DOM. The spec fails on
 the extensions up to 1.39.0, where that text was saved with every selection.
 
+`fixtures/pages/selected-links.html` is the page of the `selected-links` spec: a list where each
+link is alone in its item, as on a DokuWiki index (SingleFile#2068). The spec runs "Save selected
+links" on four selections and reads the URLs in the page that lists them. It fails on the
+extensions up to 1.39.0, where the link a selection started in was missing from the list.
+
 The sandboxed frame grades the frame-tree protocol rather than the saver. Its origin is
 opaque, so `contentDocument` is null and the only source the parent has on its own is the
 `srcdoc` attribute, which no script has run against. The frame's inline script rewrites a
