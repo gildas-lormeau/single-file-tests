@@ -263,6 +263,13 @@ link is alone in its item, as on a DokuWiki index (SingleFile#2068). The spec ru
 links" on four selections and reads the URLs in the page that lists them. It fails on the
 extensions up to 1.39.0, where the link a selection started in was missing from the list.
 
+The `failed-save` spec has no page of its own. It saves the selection of `simple.html` with
+nothing selected, presses Escape in the selection of an area that SingleFile then opens, and reads
+the page of the pending saves. It fails on the extensions up to 1.40.0, where a save that ended
+without a file kept its task. A page cannot make the capture throw, so the tests of that case run
+only with `SF_FAILED_SAVE_PROBE=1` and builds whose `processPage` throws on a URL holding
+`sf-probe-throw`, given with `SF_EXTENSION_FIREFOX` and `SF_EXTENSION_CHROMIUM`.
+
 The sandboxed frame grades the frame-tree protocol rather than the saver. Its origin is
 opaque, so `contentDocument` is null and the only source the parent has on its own is the
 `srcdoc` attribute, which no script has run against. The frame's inline script rewrites a
