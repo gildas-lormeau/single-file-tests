@@ -30,9 +30,11 @@
 	<img id="logo" src="logo.svg" alt="fixture logo" width="64" height="64">
 	<img id="responsive" src="photo.png" srcset="photo.png 1x, photo-2x.png 2x" alt="responsive photo" width="32"
 		height="32">
+	<!-- the query strings give the picture URLs of its own: an image file used twice in the page is
+		saved once and its elements are rewritten, whichever candidate each element displays -->
 	<picture>
-		<source srcset="photo-2x.png" media="(min-width: 1px)">
-		<img id="picture-image" src="photo.png" alt="picture photo" width="32" height="32">
+		<source srcset="photo-2x.png?picture" media="(min-width: 1px)">
+		<img id="picture-image" src="photo.png?picture" alt="picture photo" width="32" height="32">
 	</picture>
 
 	<svg id="inline-svg" width="40" height="40" viewBox="0 0 40 40">

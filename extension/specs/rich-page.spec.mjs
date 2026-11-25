@@ -153,7 +153,8 @@ export async function run({ session, fixtures, test }) {
 			if (!image) {
 				problems.push(id + " is gone from the saved page");
 			} else if (!DATA_IMAGE.test(image)) {
-				problems.push(id + " was not embedded");
+				// the start of the element says which way it failed: an empty resource, a URL left as it was
+				problems.push(id + " was not embedded: " + image.slice(0, 160));
 			} else {
 				const srcset = SRCSET_ATTRIBUTE.exec(image);
 				if (srcset && !EMBEDDED_CANDIDATE.test(srcset[1])) {
