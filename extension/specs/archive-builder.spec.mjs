@@ -20,6 +20,7 @@ const BATCH_PAGE = "src/ui/pages/batch-save-urls.html";
 const FIRST_URL_TITLE = "Builder first URL";
 const SECOND_URL_TITLE = "Builder second URL";
 const ADD_TO_ARCHIVE_BUTTON = "#addToArchiveButton";
+const VIEW_ARCHIVE_BUTTON = "#viewArchiveButton";
 const LISTED_URLS_COUNT = "String(document.querySelectorAll(\"#urlsTable .result-url-title\").length)";
 const FIRST_TITLE = "Builder first tab";
 const SECOND_TITLE = "Builder second tab";
@@ -311,6 +312,22 @@ export async function run({ session, fixtures, test }) {
 			}
 			const downloads = listDownloads(session.downloadDir);
 			return downloads.length ? "a file was written: " + JSON.stringify(downloads.map(path => basename(path))) : undefined;
+		});
+		await test("the batch page has a button that opens the archive in progress", async () => {
+			const batchTab = await session.openTab(session.singlefileURL(BATCH_PAGE));
+			openedTabs.push(batchTab);
+			const listArchivePages = async () => {
+				const { contexts } = await session.session.send("browsingContext.getTree", { maxDepth: 0 });
+				return contexts.filter(({ url }) => url.includes(ARCHIVE_PAGE)).map(({ context }) => context);
+			};
+			const knownPages = await listArchivePages();
+			await session.click(batchTab, VIEW_ARCHIVE_BUTTON);
+			const newPages = await waitFor(async () => (await listArchivePages()).filter(context => !knownPages.includes(context)), value => Boolean(value && value.length));
+			if (!newPages || !newPages.length) {
+				return "the page of the archive in progress was not opened";
+			}
+			openedTabs.push(...newPages);
+			return undefined;
 		});
 	} finally {
 		await session.evaluate(builderTab, "browser.runtime.sendMessage({ method: \"archive.clear\" }).then(() => \"\")").catch(() => { });
