@@ -31,6 +31,16 @@ const ZIP_PROFILE = { compressContent: true, selfExtractingArchive: false, extra
 // without the background save, the file is handed to the page, which downloads it itself: it is
 // the default in Safari and in Firefox for Android
 const FOREGROUND_PROFILE = { compressContent: true, selfExtractingArchive: false, extractDataFromPage: false, password: "", backgroundSave: false };
+const OPTIONS_PAGE = "src/ui/pages/options.html";
+const DEDUP_CHECKBOX = "#archiveDedupPagesInput";
+// the options page is one long column of collapsed sections; a headless window is far
+// too short for it, and a pointer aimed below the fold silently hits something else
+const OPTIONS_VIEWPORT = { width: 1200, height: 4000 };
+// the options page persists on change, asynchronously
+const OPTIONS_SETTLE_DELAY = 750;
+// in a ZIP file, a file stored once is replaced in the other pages by a symbolic link, whose
+// content is the relative path of the stored file: from pages/2/ it starts by going up twice
+const SYMLINK_TARGET = /\.\.\/\.\.\/[\w./-]+/g;
 const PASSWORD_PROFILE = { compressContent: true, selfExtractingArchive: false, extractDataFromPage: false, password: "secret" };
 const SECOND_PAGE_ENTRY = "pages/2/index.html";
 const THIRD_PAGE_ENTRY = "pages/3/index.html";
@@ -328,6 +338,51 @@ export async function run({ session, fixtures, test }) {
 			}
 			openedTabs.push(...newPages);
 			return undefined;
+		});
+		// The same page is added twice, so every file of the second page is a duplicate.
+		await test("with the option, the files shared by the pages are stored only once", async () => {
+			await session.evaluate(builderTab, "browser.runtime.sendMessage({ method: \"archive.clear\" }).then(() => \"\")");
+			await session.importSettings(ZIP_PROFILE);
+			const richTab = await session.openTab(fixtures.url("rich.html"));
+			openedTabs.push(richTab);
+			const richTitle = await session.evaluate(richTab, "document.title");
+			await openBuilder();
+			for (const expected of [richTitle, [richTitle, richTitle].join("\n")]) {
+				await session.activate(richTab);
+				await session.dispatch("add-tab-to-archive");
+				const titles = await rowTitles(expected);
+				if (titles != expected) {
+					return "the page lists " + JSON.stringify(titles);
+				}
+			}
+			const saveArchive = async () => {
+				await openBuilder();
+				await rowTitles([richTitle, richTitle].join("\n"));
+				clearDownloads(session.downloadDir);
+				await session.click(builderTab, SAVE_BUTTON);
+				return readFileSync(await waitForDownload(session.downloadDir)).toString("latin1");
+			};
+			const content = await saveArchive();
+			// the option is set like a user sets it, with a click in the options page
+			const optionsTab = await session.openTab(session.singlefileURL(OPTIONS_PAGE));
+			openedTabs.push(optionsTab);
+			await session.setViewport(optionsTab, OPTIONS_VIEWPORT.width, OPTIONS_VIEWPORT.height);
+			await session.click(optionsTab, "#expandAllButton");
+			await new Promise(resolve => setTimeout(resolve, OPTIONS_SETTLE_DELAY));
+			await session.click(optionsTab, DEDUP_CHECKBOX);
+			await new Promise(resolve => setTimeout(resolve, OPTIONS_SETTLE_DELAY));
+			const dedupContent = await saveArchive();
+			const targets = dedupContent.match(SYMLINK_TARGET) || [];
+			if (!dedupContent.includes(SECOND_PAGE_ENTRY)) {
+				return "the archive does not hold the second page";
+			}
+			if (content.match(SYMLINK_TARGET)) {
+				return "without the option, the archive holds symbolic links";
+			}
+			if (!targets.length) {
+				return "with the option, no file of the second page is a symbolic link";
+			}
+			return dedupContent.length < content.length ? undefined : "the archive is not smaller with the option (" + dedupContent.length + " bytes, " + content.length + " without)";
 		});
 	} finally {
 		await session.evaluate(builderTab, "browser.runtime.sendMessage({ method: \"archive.clear\" }).then(() => \"\")").catch(() => { });
