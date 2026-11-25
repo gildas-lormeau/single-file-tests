@@ -37,6 +37,8 @@ const TOC_LINKS = "Array.from(document.querySelectorAll(\"a\")).map(link => link
 const ERROR_BAR_TAGNAME = "singlefile-error-bar";
 const ERROR_BAR_TEXT = `(() => { const bar = document.querySelector("${ERROR_BAR_TAGNAME}"); return bar && bar.shadowRoot ? bar.shadowRoot.textContent : ""; })()`;
 const SAVED_PAGE_SCHEMES = ["http://", "file://"];
+const EDITOR_PAGE = "editor.html";
+const EDITOR_SETTLE_DELAY = 4000;
 
 export const name = "tabs-archive";
 export const level = 2;
@@ -148,6 +150,37 @@ export async function run({ session, fixtures, test }) {
 			}
 			const downloads = listDownloads(session.downloadDir);
 			return downloads.length ? "a file was saved: " + JSON.stringify(downloads) : undefined;
+		});
+
+		// The annotation editor saves its page on its own, after it answered the request: its
+		// page arrived once the archive was written, and was saved in a file of its own beside
+		// the archive. The editor tab is left out, like every tab that cannot be saved.
+		await test("the annotation editor tab is left out, and saves no file of its own", async () => {
+			await session.importSettings(ZIP_PROFILE);
+			await session.activate(firstTab);
+			await session.dispatch("edit-and-save-page");
+			const editorTab = await waitFor(async () => {
+				const { contexts } = await session.session.send("browsingContext.getTree", { maxDepth: 0 });
+				return contexts.find(({ url }) => url.includes(EDITOR_PAGE));
+			}, Boolean);
+			if (!editorTab) {
+				return "the annotation editor did not open";
+			}
+			openedTabs.push(editorTab.context);
+			// the editor gets its page after its tab is loaded
+			await new Promise(resolve => setTimeout(resolve, EDITOR_SETTLE_DELAY));
+			const savedPath = await saveTabs(session, "save-all-tabs-in-archive");
+			// a second file, if any, comes after the archive
+			await new Promise(resolve => setTimeout(resolve, EDITOR_SETTLE_DELAY));
+			const downloads = listDownloads(session.downloadDir);
+			if (downloads.length != 1) {
+				return "expected one file, found " + JSON.stringify(downloads.map(path => basename(path)));
+			}
+			const content = readFileSync(savedPath).toString("latin1");
+			if (!content.includes(THIRD_PAGE_ENTRY)) {
+				return "the archive does not hold the three tabs";
+			}
+			return content.includes(FOURTH_PAGE_PREFIX) ? "the editor tab was saved as a fourth page" : undefined;
 		});
 	} finally {
 		await session.importSettings(HTML_PROFILE);
