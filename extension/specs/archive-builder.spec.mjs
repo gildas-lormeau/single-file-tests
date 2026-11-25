@@ -22,6 +22,9 @@ const THIRD_TITLE = "Builder third tab";
 const RENAMED_TITLE = "Renamed in the builder";
 const HTML_PROFILE = { compressContent: false, selfExtractingArchive: false, extractDataFromPage: false, password: "" };
 const ZIP_PROFILE = { compressContent: true, selfExtractingArchive: false, extractDataFromPage: false, password: "" };
+// without the background save, the file is handed to the page, which downloads it itself: it is
+// the default in Safari and in Firefox for Android
+const FOREGROUND_PROFILE = { compressContent: true, selfExtractingArchive: false, extractDataFromPage: false, password: "", backgroundSave: false };
 const PASSWORD_PROFILE = { compressContent: true, selfExtractingArchive: false, extractDataFromPage: false, password: "secret" };
 const SECOND_PAGE_ENTRY = "pages/2/index.html";
 const THIRD_PAGE_ENTRY = "pages/3/index.html";
@@ -210,6 +213,27 @@ export async function run({ session, fixtures, test }) {
 				problems.push("a fourth page was saved");
 			}
 			return problems.length ? problems.join("; ") : undefined;
+		});
+
+		await test("without the background save, the page downloads the archive itself", async () => {
+			if (!archivePath) {
+				return "no archive was saved";
+			}
+			await session.importSettings(FOREGROUND_PROFILE);
+			await openBuilder();
+			await rowTitles([RENAMED_TITLE, FIRST_TITLE, THIRD_TITLE].join("\n"));
+			clearDownloads(session.downloadDir);
+			await session.click(builderTab, SAVE_BUTTON);
+			const savedPath = await waitForDownload(session.downloadDir);
+			if (!savedPath.endsWith(".zip")) {
+				return "unexpected name for the archive: " + basename(savedPath);
+			}
+			const content = readFileSync(savedPath).toString("latin1");
+			if (!content.startsWith(ZIP_SIGNATURE) || !content.includes(THIRD_PAGE_ENTRY)) {
+				return "the file is not the archive of the three pages";
+			}
+			const errorText = await session.evaluate(builderTab, ERROR_TEXT);
+			return errorText ? "an error was displayed: " + JSON.stringify(errorText) : undefined;
 		});
 
 		await test("a profile with a password is refused with an error in the page, and nothing is saved", async () => {
