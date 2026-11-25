@@ -16,6 +16,11 @@ import { pathToFileURL } from "node:url";
 import { waitForDownload, clearDownloads, listDownloads } from "../expect/saved-page.mjs";
 
 const ARCHIVE_PAGE = "src/ui/pages/archive.html";
+const BATCH_PAGE = "src/ui/pages/batch-save-urls.html";
+const FIRST_URL_TITLE = "Builder first URL";
+const SECOND_URL_TITLE = "Builder second URL";
+const ADD_TO_ARCHIVE_BUTTON = "#addToArchiveButton";
+const LISTED_URLS_COUNT = "String(document.querySelectorAll(\"#urlsTable .result-url-title\").length)";
 const FIRST_TITLE = "Builder first tab";
 const SECOND_TITLE = "Builder second tab";
 const THIRD_TITLE = "Builder third tab";
@@ -272,6 +277,40 @@ export async function run({ session, fixtures, test }) {
 			await new Promise(resolve => setTimeout(resolve, NO_DOWNLOAD_DELAY));
 			titles = await session.evaluate(builderTab, ROW_TITLES);
 			return titles == "" ? undefined : "after a reload the page lists " + JSON.stringify(titles);
+		});
+		// The URLs are typed in the batch page, which is also where "save selected links" puts
+		// the links. Each one is loaded in a tab of its own, which is closed once it is stored.
+		await test("the batch page adds its URLs to the archive, in the order of its list", async () => {
+			if (!pagesAdded) {
+				return "the first pages were not stored";
+			}
+			await session.importSettings(HTML_PROFILE);
+			const urls = [fixtures.titledURL(FIRST_URL_TITLE), fixtures.titledURL(SECOND_URL_TITLE)];
+			const batchTab = await session.openTab(session.singlefileURL(BATCH_PAGE));
+			openedTabs.push(batchTab);
+			for (const url of urls) {
+				await session.evaluate(batchTab, "(() => { const input = document.getElementById(\"addUrlInput\"); input.value = " + JSON.stringify(url) + "; document.getElementById(\"addUrlForm\").onsubmit(); })()");
+			}
+			await waitFor(() => session.evaluate(batchTab, LISTED_URLS_COUNT), value => value == String(urls.length));
+			clearDownloads(session.downloadDir);
+			await session.click(batchTab, ADD_TO_ARCHIVE_BUTTON);
+			await openBuilder();
+			const expected = [FIRST_URL_TITLE, SECOND_URL_TITLE].join("\n");
+			const titles = await rowTitles(expected);
+			if (titles != expected) {
+				return "the page lists " + JSON.stringify(titles);
+			}
+			const listedCount = await session.evaluate(batchTab, LISTED_URLS_COUNT);
+			if (listedCount != "0") {
+				return "the batch page still lists " + listedCount + " URL(s)";
+			}
+			const { contexts } = await session.session.send("browsingContext.getTree", { maxDepth: 0 });
+			const leftOpen = contexts.filter(({ url }) => urls.includes(url));
+			if (leftOpen.length) {
+				return "a tab opened for a URL was left open";
+			}
+			const downloads = listDownloads(session.downloadDir);
+			return downloads.length ? "a file was written: " + JSON.stringify(downloads.map(path => basename(path))) : undefined;
 		});
 	} finally {
 		await session.evaluate(builderTab, "browser.runtime.sendMessage({ method: \"archive.clear\" }).then(() => \"\")").catch(() => { });
