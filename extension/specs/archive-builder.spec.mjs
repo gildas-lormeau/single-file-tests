@@ -11,6 +11,7 @@
 // browser restart between two additions (the session is shared with the other specs).
 
 import { readFileSync } from "node:fs";
+import { inflateRawSync } from "node:zlib";
 import { basename } from "node:path";
 import { pathToFileURL } from "node:url";
 import { waitForDownload, clearDownloads, listDownloads } from "../expect/saved-page.mjs";
@@ -41,6 +42,13 @@ const OPTIONS_SETTLE_DELAY = 750;
 // in a ZIP file, a file stored once is replaced in the other pages by a symbolic link, whose
 // content is the relative path of the stored file: from pages/2/ it starts by going up twice
 const SYMLINK_TARGET = /\.\.\/\.\.\/[\w./-]+/g;
+const ARCHIVE_OPTIONS_PROFILE = { ...ZIP_PROFILE, archiveTableOfContents: false, archiveMarkUnarchivedLinks: true, archivePageTransitions: "fade" };
+const FADE_TRANSITION = "fade";
+// the records of a ZIP file used to read one of its entries
+const CENTRAL_HEADER_SIGNATURE = 0x02014b50;
+const CENTRAL_HEADER_LENGTH = 46;
+const LOCAL_HEADER_LENGTH = 30;
+const DEFLATE_METHOD = 8;
 const PASSWORD_PROFILE = { compressContent: true, selfExtractingArchive: false, extractDataFromPage: false, password: "secret" };
 const SECOND_PAGE_ENTRY = "pages/2/index.html";
 const THIRD_PAGE_ENTRY = "pages/3/index.html";
@@ -384,6 +392,41 @@ export async function run({ session, fixtures, test }) {
 			}
 			return dedupContent.length < content.length ? undefined : "the archive is not smaller with the option (" + dedupContent.length + " bytes, " + content.length + " without)";
 		});
+		// The pages added by the previous test are saved twice more, with and without the options.
+		await test("the table of contents, the marking of links and the transitions follow the options", async () => {
+			const saveArchive = async profile => {
+				await session.importSettings(profile);
+				await openBuilder();
+				await waitFor(() => session.evaluate(builderTab, ROW_TITLES), value => Boolean(value));
+				clearDownloads(session.downloadDir);
+				await session.click(builderTab, SAVE_BUTTON);
+				return readFileSync(await waitForDownload(session.downloadDir));
+			};
+			const archive = await saveArchive(ZIP_PROFILE);
+			const manifest = JSON.parse(readEntry(archive, PAGES_ENTRY));
+			const problems = [];
+			if (!manifest.pages || manifest.pages.length != 2) {
+				problems.push("the file describing the pages lists " + JSON.stringify(manifest.pages));
+			}
+			if (readEntry(archive, TOC_ENTRY) === undefined) {
+				problems.push("by default, the archive has no table of contents");
+			}
+			if (manifest.markUnarchivedLinks || manifest.pageTransitions) {
+				problems.push("by default, the archive marks links or sets a transition");
+			}
+			const optionsArchive = await saveArchive(ARCHIVE_OPTIONS_PROFILE);
+			const optionsManifest = JSON.parse(readEntry(optionsArchive, PAGES_ENTRY));
+			if (readEntry(optionsArchive, TOC_ENTRY) !== undefined) {
+				problems.push("with the option unchecked, the archive has a table of contents");
+			}
+			if (optionsManifest.markUnarchivedLinks !== true) {
+				problems.push("the marking of links is not set");
+			}
+			if (optionsManifest.pageTransitions != FADE_TRANSITION) {
+				problems.push("the transition is " + JSON.stringify(optionsManifest.pageTransitions));
+			}
+			return problems.length ? problems.join("; ") : undefined;
+		});
 	} finally {
 		await session.evaluate(builderTab, "browser.runtime.sendMessage({ method: \"archive.clear\" }).then(() => \"\")").catch(() => { });
 		await session.importSettings(HTML_PROFILE);
@@ -391,6 +434,26 @@ export async function run({ session, fixtures, test }) {
 			await session.closeTab(context);
 		}
 	}
+}
+
+// Read the text of an entry of a ZIP file, or undefined when the file has no such entry. The
+// entry is found through the central directory, where its size is always recorded.
+function readEntry(archive, entryName) {
+	for (let offset = archive.length - CENTRAL_HEADER_LENGTH; offset >= 0; offset--) {
+		if (archive.readUInt32LE(offset) == CENTRAL_HEADER_SIGNATURE) {
+			const nameLength = archive.readUInt16LE(offset + 28);
+			const name = archive.toString("utf8", offset + CENTRAL_HEADER_LENGTH, offset + CENTRAL_HEADER_LENGTH + nameLength);
+			if (name == entryName) {
+				const method = archive.readUInt16LE(offset + 10);
+				const compressedSize = archive.readUInt32LE(offset + 20);
+				const localOffset = archive.readUInt32LE(offset + 42);
+				const dataOffset = localOffset + LOCAL_HEADER_LENGTH + archive.readUInt16LE(localOffset + 26) + archive.readUInt16LE(localOffset + 28);
+				const data = archive.subarray(dataOffset, dataOffset + compressedSize);
+				return (method == DEFLATE_METHOD ? inflateRawSync(data) : data).toString("utf8");
+			}
+		}
+	}
+	return undefined;
 }
 
 async function waitFor(read, accept, { timeout = 15000 } = {}) {
