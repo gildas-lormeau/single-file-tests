@@ -6,6 +6,7 @@
 //   node extension/run.mjs                    both browsers, every spec
 //   node extension/run.mjs --browser=firefox  one browser
 //   node extension/run.mjs --spec=save-page   one spec
+//   node extension/run.mjs --shard=2/3        the second of three groups of specs
 //   node extension/run.mjs --headful          watch it happen
 //   node extension/run.mjs --release          test the packaged build, not the working tree
 
@@ -16,8 +17,24 @@ import { startFixtureServer } from "./fixtures/server.mjs";
 
 const SPECS_DIR = fileURLToPath(new URL("./specs", import.meta.url));
 
+// Rough duration of the slow specs, in seconds, measured on a CI runner. It only serves
+// to split the specs into groups of similar length for --shard: a wrong or missing
+// figure makes a group slower, it never drops a spec. Add a spec here when it takes
+// more than about 15 seconds.
+const SPEC_WEIGHTS = {
+	"autosave": 120,
+	"archive-builder": 64,
+	"autosave-navigation": 44,
+	"tabs-archive": 41,
+	"options": 34,
+	"filename": 20,
+	"autosave-discard": 18
+};
+const DEFAULT_SPEC_WEIGHT = 8;
+
 const options = parseArguments(process.argv.slice(2));
 const browsers = options.browser ? [options.browser] : BROWSERS;
+const specNames = selectSpecs();
 let failures = 0;
 let passes = 0;
 let known = 0;
@@ -51,7 +68,7 @@ async function runBrowser(browserName) {
 		console.log("   WARNING this package is stale: " + session.releaseStaleness);
 	}
 	try {
-		for (const specName of listSpecs()) {
+		for (const specName of specNames) {
 			const spec = await import(new URL("./specs/" + specName, import.meta.url));
 			console.log("-- " + spec.name + " (level " + spec.level + ")");
 			try {
@@ -102,6 +119,35 @@ function listSpecs() {
 		.filter(name => name.endsWith(".spec.mjs"))
 		.filter(name => !options.spec || name.startsWith(options.spec))
 		.sort();
+}
+
+// --shard=i/n keeps one group out of n, so that n runs started with i from 1 to n cover
+// every spec exactly once. The CI workflows of the extensions use it to run the suite on
+// several machines at the same time. The groups are built by handing the specs out from
+// the slowest to the fastest, each one to the group that is the shortest so far, which
+// gives the same groups on every machine. A group runs its specs in the usual order.
+function selectSpecs() {
+	const names = listSpecs();
+	if (options.shard === undefined) {
+		return names;
+	}
+	const match = /^(\d+)\/(\d+)$/.exec(options.shard);
+	const index = match && Number(match[1]);
+	const count = match && Number(match[2]);
+	if (!match || index < 1 || index > count) {
+		console.log("FAILED: --shard expects i/n with 1 <= i <= n, got " + options.shard);
+		process.exit(1);
+	}
+	const weight = name => SPEC_WEIGHTS[name.replace(/\.spec\.mjs$/, "")] || DEFAULT_SPEC_WEIGHT;
+	const groups = Array.from({ length: count }, () => ({ names: [], weight: 0 }));
+	[...names].sort((first, second) => weight(second) - weight(first) || (first < second ? -1 : 1)).forEach(name => {
+		const group = groups.reduce((shortest, candidate) => candidate.weight < shortest.weight ? candidate : shortest);
+		group.names.push(name);
+		group.weight += weight(name);
+	});
+	const selected = groups[index - 1].names.sort();
+	console.log("shard " + options.shard + ": " + selected.map(name => name.replace(/\.spec\.mjs$/, "")).join(", "));
+	return selected;
 }
 
 function parseArguments(argv) {

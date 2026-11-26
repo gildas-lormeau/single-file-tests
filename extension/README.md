@@ -7,9 +7,15 @@ extension to do something the way a user would, then check the file it wrote.
 npm run test-extension                       both browsers, every spec
 npm run test-extension-firefox               one browser
 node extension/run.mjs --spec=save-page      one spec
+node extension/run.mjs --shard=2/3           the second of three groups of specs
 node extension/run.mjs --headful             watch it happen
 npm run test-release                         the packaged builds, then the format suite
 ```
+
+`--shard=i/n` splits the specs into `n` groups of similar length and runs group `i`. The
+CI workflows of the two extensions start one job per group to shorten the run. The split
+uses the durations listed in `SPEC_WEIGHTS` at the top of `run.mjs`: a slow new spec
+should be added there. A release is gated on a run without `--shard`.
 
 The extensions under test are the sibling checkouts: `single-file` (MV2, Firefox) and
 `single-file-mv3` (MV3, Chromium). Override with `SF_EXTENSION_FIREFOX` and
