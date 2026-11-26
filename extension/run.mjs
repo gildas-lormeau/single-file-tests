@@ -24,6 +24,7 @@ const SPECS_DIR = fileURLToPath(new URL("./specs", import.meta.url));
 const SPEC_WEIGHTS = {
 	"autosave": 120,
 	"archive-builder": 64,
+	"pending-pause": 60,
 	"autosave-navigation": 44,
 	"tabs-archive": 41,
 	"options": 34,
