@@ -38,6 +38,8 @@ const ERROR_BAR_TAGNAME = "singlefile-error-bar";
 const ERROR_BAR_TEXT = `(() => { const bar = document.querySelector("${ERROR_BAR_TAGNAME}"); return bar && bar.shadowRoot ? bar.shadowRoot.textContent : ""; })()`;
 const SAVED_PAGE_SCHEMES = ["http://", "file://"];
 const EDITOR_PAGE = "editor.html";
+const OPTIONS_PAGE = "options.html";
+const FAILURE_TEXT = "could not be saved in the archive";
 const EDITOR_SETTLE_DELAY = 4000;
 
 export const name = "tabs-archive";
@@ -67,6 +69,28 @@ export async function run({ session, fixtures, test }) {
 			}
 			archivePath = savedPath;
 			return undefined;
+		});
+
+		// importing the settings left the options page open, and it is a tab like the others
+		// for "all tabs": it cannot be saved, and the user is told so in the tab in front, which
+		// is the last one that was opened
+		await test("the tabs that could not be saved are listed in an error message", async () => {
+			if (!archivePath) {
+				return "no archive was saved";
+			}
+			const errorText = await waitFor(() => session.evaluate(thirdTab, ERROR_BAR_TEXT), value => Boolean(value));
+			if (!errorText) {
+				return "no error was displayed in the tab in front";
+			}
+			if (!errorText.includes(FAILURE_TEXT) || !errorText.includes(OPTIONS_PAGE)) {
+				return "unexpected error message: " + JSON.stringify(errorText);
+			}
+			// the first tab of the browser is still open on its start page, which nobody
+			// expects in an archive: it is not reported
+			if (errorText.includes("about:")) {
+				return "the start page of the browser is listed as missing: " + JSON.stringify(errorText);
+			}
+			return [FIRST_TITLE, SECOND_TITLE, THIRD_TITLE].some(title => errorText.includes(encodeURIComponent(title))) ? "a saved tab is listed as missing: " + JSON.stringify(errorText) : undefined;
 		});
 
 		await test("the archive opens on a table of contents listing the tabs in tab order", async () => {
@@ -140,8 +164,10 @@ export async function run({ session, fixtures, test }) {
 			clearDownloads(session.downloadDir);
 			await session.dispatch("save-all-tabs-in-archive");
 			// the error bar is the signal that the action was handled: checking the
-			// download directory before it would pass on an extension that did nothing yet
-			const errorText = await waitFor(() => session.evaluate(thirdTab, ERROR_BAR_TEXT), value => Boolean(value));
+			// download directory before it would pass on an extension that did nothing yet.
+			// The tab already shows the error of the earlier saves, which listed the tabs
+			// left out of the archive, so the text is awaited and not only the bar
+			const errorText = await waitFor(() => session.evaluate(thirdTab, ERROR_BAR_TEXT), value => Boolean(value && value.includes("password")));
 			if (!errorText) {
 				return "no error was displayed in the tab in front";
 			}

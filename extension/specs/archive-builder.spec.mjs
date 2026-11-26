@@ -49,6 +49,12 @@ const CENTRAL_HEADER_SIGNATURE = 0x02014b50;
 const CENTRAL_HEADER_LENGTH = 46;
 const LOCAL_HEADER_LENGTH = 30;
 const DEFLATE_METHOD = 8;
+const FAILED_ROW_URLS = "Array.from(document.querySelectorAll(\"#pagesTable .page-failed .page-url\")).map(label => label.textContent).join(\"\\n\")";
+const FAILED_ROW_STATUS = "Array.from(document.querySelectorAll(\"#pagesTable .page-failed .page-size\")).map(cell => cell.textContent).join(\"\\n\")";
+const FAILED_LABEL = "document.getElementById(\"failedLabel\").hidden ? \"\" : document.getElementById(\"failedLabel\").textContent";
+const FAILED_ROW_REMOVE_BUTTON = "#pagesTable .page-failed .page-remove button";
+const ROWS_COUNT = "String(document.querySelectorAll(\"#pagesTable .page-title input\").length)";
+const NOT_SAVED_STATUS = "not saved";
 const PASSWORD_PROFILE = { compressContent: true, selfExtractingArchive: false, extractDataFromPage: false, password: "secret" };
 const SECOND_PAGE_ENTRY = "pages/2/index.html";
 const THIRD_PAGE_ENTRY = "pages/3/index.html";
@@ -426,6 +432,42 @@ export async function run({ session, fixtures, test }) {
 				problems.push("the transition is " + JSON.stringify(optionsManifest.pageTransitions));
 			}
 			return problems.length ? problems.join("; ") : undefined;
+		});
+		// The page of the archive in progress is a page of the extension, which SingleFile cannot
+		// save: it is the tab in front when the action is dispatched. The two pages added by the
+		// earlier tests are still in the list.
+		await test("a tab that cannot be saved is listed as not saved, and is left out of the archive", async () => {
+			await session.importSettings(ZIP_PROFILE);
+			await openBuilder();
+			const savedCount = Number(await waitFor(() => session.evaluate(builderTab, ROWS_COUNT), value => Number(value) > 0));
+			if (!savedCount) {
+				return "the list is empty, there is no saved page to tell from the failed one";
+			}
+			await session.dispatch("add-tab-to-archive");
+			const failedURLs = await waitFor(() => session.evaluate(builderTab, FAILED_ROW_URLS), value => Boolean(value));
+			if (!failedURLs || !failedURLs.includes(ARCHIVE_PAGE) || failedURLs.includes("\n")) {
+				return "the rows marked as failed are " + JSON.stringify(failedURLs);
+			}
+			const status = await session.evaluate(builderTab, FAILED_ROW_STATUS);
+			if (status != NOT_SAVED_STATUS) {
+				return "the status of the failed row is " + JSON.stringify(status);
+			}
+			const failedLabel = await session.evaluate(builderTab, FAILED_LABEL);
+			if (!failedLabel.includes("1")) {
+				return "the number of failed pages is displayed as " + JSON.stringify(failedLabel);
+			}
+			clearDownloads(session.downloadDir);
+			await session.click(builderTab, SAVE_BUTTON);
+			const manifest = JSON.parse(readEntry(readFileSync(await waitForDownload(session.downloadDir)), PAGES_ENTRY));
+			if (manifest.pages.length != savedCount) {
+				return "the archive holds " + manifest.pages.length + " page(s), " + savedCount + " were saved";
+			}
+			await session.click(builderTab, FAILED_ROW_REMOVE_BUTTON);
+			const rowsCount = await waitFor(() => session.evaluate(builderTab, ROWS_COUNT), value => value == String(savedCount));
+			if (rowsCount != String(savedCount)) {
+				return "after the removal the list holds " + rowsCount + " row(s)";
+			}
+			return await session.evaluate(builderTab, FAILED_LABEL) ? "the number of failed pages is still displayed" : undefined;
 		});
 	} finally {
 		await session.evaluate(builderTab, "browser.runtime.sendMessage({ method: \"archive.clear\" }).then(() => \"\")").catch(() => { });
