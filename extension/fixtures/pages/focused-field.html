@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Focused text field</title>
+</head>
+<body>
+<h1>Focused text field</h1>
+<p>TEXT_BEFORE_FIELD</p>
+<div><span>FIELD_LABEL</span><textarea id="field"></textarea></div>
+<p>TEXT_AFTER_FIELD</p>
+<script>
+// A chat page gives the focus to its text field as soon as it is loaded. Nothing is selected, but
+// Chromium then answers getComposedRanges() with a range around the field (SingleFile#2078).
+document.querySelector("#field").focus();
+</script>
+</body>
+</html>

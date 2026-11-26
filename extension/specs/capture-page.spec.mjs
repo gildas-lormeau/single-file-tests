@@ -10,6 +10,7 @@ const PROMPT_MARKER = "externalCaptureRequestId";
 const OPTIONS_VIEWPORT = { width: 1200, height: 4000 };
 const SFZ_PRELUDE = /<html data-sfz>/;
 const MARKER_TEXT = "FUNCTIONAL_FIXTURE_MARKER";
+const FOCUSED_FIELD_TEXTS = ["TEXT_BEFORE_FIELD", "FIELD_LABEL", "TEXT_AFTER_FIELD"];
 
 export const name = "capture-page";
 export const level = 2;
@@ -81,6 +82,16 @@ export async function run({ session, fixtures, test }) {
 		}
 		return problems.join("; ") || undefined;
 	});
+
+	await test("a focused text field is not taken for a selection", async () => {
+		// optionallySelected is what the shortcut Ctrl+Shift+Y asks for: the selection if there is
+		// one, the page otherwise. With the focus in a text field nothing is selected, but Chromium
+		// reports a range around the field, and only the field was saved (SingleFile#2078).
+		const captured = await captureFixture(session, fixtures, { optionallySelected: true }, "focused-field.html");
+		const content = String(captured && captured.content);
+		const missing = FOCUSED_FIELD_TEXTS.filter(text => !content.includes(text));
+		return missing.length ? "missing from the page captured with the focus in a text field: " + missing.join(", ") : undefined;
+	});
 }
 
 function capture(session, config, responseTimeout = CAPTURE_TIMEOUT) {
@@ -90,8 +101,8 @@ function capture(session, config, responseTimeout = CAPTURE_TIMEOUT) {
 
 // capture-page acts on the active tab, and opening the fixture makes it active again —
 // which matters because the approval page from the first test is still open
-async function captureFixture(session, fixtures, config) {
-	await session.openTab(fixtures.url("simple.html"));
+async function captureFixture(session, fixtures, config, page = "simple.html") {
+	await session.openTab(fixtures.url(page));
 	return capture(session, config);
 }
 
