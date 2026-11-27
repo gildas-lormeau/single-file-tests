@@ -10,6 +10,15 @@
 // keeps the worker alive, so the loss only shows once that page is closed. The paused tasks made
 // of a URL are kept in `storage.session` and put back in the queue when the worker starts again.
 //
+// The stop of the worker is a natural one, which also proves that nothing in SingleFile keeps the
+// worker alive while the queue is paused. The suite cannot count on it in a browser other specs
+// have used: with the driver attached, once the worker has been stopped and started again while
+// a tab of the extension was left open, Chromium does not stop it any more (measured with an
+// empty extension too; without the driver it is stopped). One tab left open by an earlier spec
+// and 30 idle seconds were enough for this test to prove nothing. The Chromium tests therefore
+// run in a browser of their own, where the stop they wait for is the first. A spec that needs a
+// stop after a restart has to close every tab of the extension first, or to force the stop.
+//
 // Level 3 because the batch is started and the queue is read through the messages SingleFile's own
 // pages send. The click on the pause button and the counter are read in the real page.
 
@@ -32,12 +41,31 @@ const WORKER_STOP_DELAY = 40000;
 export const name = "pending-pause";
 export const level = 3;
 
-export async function run({ session, fixtures, test }) {
+export async function run({ session: mainSession, fixtures, test }) {
+	if (mainSession.browserName == "firefox") {
+		// no service worker there, the main browser does
+		return runTests({ session: mainSession, fixtures, test });
+	}
+	let session;
+	try {
+		session = await mainSession.openVariant();
+	} catch (error) {
+		await test("a browser of its own starts for the stop of the service worker", async () => error.message);
+		return;
+	}
+	try {
+		await runTests({ session, fixtures, test });
+	} finally {
+		await session.close();
+	}
+}
+
+async function runTests({ session, fixtures, test }) {
 	const { savedFiles } = autoSaveHelpers({ session, fixtures });
 	const run = Date.now();
 	let workerCount, runningTitles, heldTitles, archiveUrls, paused;
 
-	// the defaults, whatever the spec before left behind
+	// the defaults, whatever the spec before left behind in Firefox
 	await session.closeTab(await session.importSettings({}));
 
 	await test("a pause holds the saves that are not started", async () => {
