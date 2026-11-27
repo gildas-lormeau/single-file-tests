@@ -1,5 +1,6 @@
-// Level 3 spec: the action "save-tab-group-in-archive" saves the tabs of the tab group of the
-// current tab in one archive, and "add-tab-group-to-archive" adds them to the archive in progress.
+// Level 3 spec: the action "save-tab-group" saves the tabs of the tab group of the current tab,
+// "save-tab-group-in-archive" saves them in one archive, and "add-tab-group-to-archive" adds them
+// to the archive in progress.
 //
 // Three tabs are open, the first and the third are put in a tab group and the second is left
 // outside of it. The action is sent while a tab of the group is in front: the archive must hold
@@ -30,6 +31,9 @@ const ERROR_BAR_TEXT = `(() => { const bar = document.querySelector("${ERROR_BAR
 const NO_GROUP_TEXT = "not in a tab group";
 const ACTION = "save-tab-group-in-archive";
 const ADD_ACTION = "add-tab-group-to-archive";
+const SAVE_ACTION = "save-tab-group";
+// long enough for a file that should not be written to show up
+const NO_DOWNLOAD_DELAY = 3000;
 const ARCHIVE_PAGE = "src/ui/pages/archive.html";
 // joined in the page: the driver hands back a string as it is, and an array as a description of it
 const ROW_TITLES = "Array.from(document.querySelectorAll(\"#pagesTable .page-title input\")).map(input => input.value).join(\"\\n\")";
@@ -109,6 +113,22 @@ export async function run({ session, fixtures, test }) {
 				problems.push("a third page was saved, the group holds two tabs");
 			}
 			return problems.length ? problems.join("; ") : undefined;
+		});
+
+		await test("save-tab-group saves each tab of the group in a file of its own", async () => {
+			if (!grouped) {
+				return "no tab group was made";
+			}
+			await session.activate(lastTab);
+			clearDownloads(session.downloadDir);
+			await session.dispatch(SAVE_ACTION);
+			const names = () => listDownloads(session.downloadDir).map(path => basename(path)).sort();
+			const complete = files => [FIRST_TITLE, LAST_TITLE].every(title => files.some(file => file.startsWith(title) && file.endsWith(".zip")));
+			await waitFor(async () => names(), complete);
+			// the tab outside of the group must not come later
+			await new Promise(resolve => setTimeout(resolve, NO_DOWNLOAD_DELAY));
+			const files = names();
+			return files.length == 2 && complete(files) ? undefined : "the files are " + JSON.stringify(files);
 		});
 
 		await test("add-tab-group-to-archive adds the tabs of the group to the archive in progress", async () => {
