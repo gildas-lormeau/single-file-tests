@@ -23,6 +23,8 @@ const EXTENSION_PATHS = {
 export { openSession, BROWSERS };
 
 const BROWSERS = ["chromium", "firefox"];
+const IMPORT_TIMEOUT = 10000;
+const IMPORT_POLL_DELAY = 50;
 const OPTIONS_PAGE = "src/ui/pages/options.html";
 // The options page is one long column and a headless window is far too short for it; a
 // pointer aimed below the fold either errors (Firefox) or silently hits something else
@@ -344,8 +346,16 @@ async function openSession(browserName, { headless = true, release = false } = {
 				files: [settingsPath]
 			});
 		}
-		// the handler reads the file and writes storage asynchronously
-		await new Promise(resolve => setTimeout(resolve, 2500));
+		// The handler reads the file, has it stored, refreshes the page and empties the file
+		// input as its last step: an empty input means the settings are in place. The profiles
+		// are stored complete in one write since the import fills the defaults before storing.
+		const deadline = Date.now() + IMPORT_TIMEOUT;
+		while (await evaluate(context, "document.querySelector(\"#fileInput\").value") !== "") {
+			if (Date.now() > deadline) {
+				throw new Error("the settings were not imported after " + IMPORT_TIMEOUT + " ms");
+			}
+			await new Promise(resolve => setTimeout(resolve, IMPORT_POLL_DELAY));
+		}
 		// the directory, not just the file inside it: this runs once per option change
 		releaseDirectory(settingsDir);
 		return context;
