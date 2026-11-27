@@ -19,7 +19,7 @@ export async function run({ session, fixtures, test }) {
 	const destination = { saveWithWebDAV: true, webDAVURL: webDAV.url, webDAVUser: "user", webDAVPassword: "password" };
 	try {
 		await test("a plain save is uploaded to the WebDAV server", async () => {
-			await session.importSettings(destination);
+			await session.closeTab(await session.importSettings(destination));
 			const body = await saveFixture(session, fixtures, webDAV);
 			if (!body) {
 				return "nothing was uploaded";
@@ -29,7 +29,7 @@ export async function run({ session, fixtures, test }) {
 		});
 
 		await test("an archive save is uploaded byte for byte", async () => {
-			await session.importSettings({ ...destination, ...ARCHIVE_PROFILE });
+			await session.closeTab(await session.importSettings({ ...destination, ...ARCHIVE_PROFILE }));
 			const body = await saveFixture(session, fixtures, webDAV);
 			if (!body) {
 				return "nothing was uploaded";
@@ -46,7 +46,7 @@ export async function run({ session, fixtures, test }) {
 			return body.toString("latin1").includes("ï¿½") ? "the uploaded archive went through a text decode" : undefined;
 		});
 	} finally {
-		await session.importSettings({ saveWithWebDAV: false });
+		await session.closeTab(await session.importSettings({ saveWithWebDAV: false }));
 		webDAV.close();
 	}
 }

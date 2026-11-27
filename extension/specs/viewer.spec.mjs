@@ -17,7 +17,7 @@ export const level = 3;
 
 export async function run({ session, fixtures, test }) {
 	await test("the saved page opens in the viewer", async () => {
-		await session.importSettings({ openSavedPage: true });
+		await session.closeTab(await session.importSettings({ openSavedPage: true }));
 		let context;
 		try {
 			clearDownloads(session.downloadDir);
@@ -48,7 +48,7 @@ export async function run({ session, fixtures, test }) {
 			if (context) {
 				await session.closeTab(context);
 			}
-			await session.importSettings({ openSavedPage: false });
+			await session.closeTab(await session.importSettings({ openSavedPage: false }));
 		}
 	});
 

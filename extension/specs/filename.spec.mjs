@@ -33,7 +33,7 @@ export const name = "filename";
 export const level = 2;
 
 export async function run({ session, fixtures, test }) {
-	await session.importSettings(TITLE_TEMPLATE);
+	await session.closeTab(await session.importSettings(TITLE_TEMPLATE));
 
 	await test("a plain title becomes the filename verbatim", async () => {
 		const { name } = await saveTitled(session, fixtures, "Plain fixture title");
@@ -101,7 +101,7 @@ export async function run({ session, fixtures, test }) {
 		return path.startsWith(session.downloadDir) ? undefined : "saved outside the download directory: " + path;
 	});
 
-	await session.importSettings(DEFAULT_TEMPLATE);
+	await session.closeTab(await session.importSettings(DEFAULT_TEMPLATE));
 }
 
 // One save per case, named by what the page calls itself. Hidden files are included

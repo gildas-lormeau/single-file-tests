@@ -46,7 +46,7 @@ export const name = "tabs-archive";
 export const level = 2;
 
 export async function run({ session, fixtures, test }) {
-	await session.importSettings(HTML_PROFILE);
+	await session.closeTab(await session.importSettings(HTML_PROFILE));
 	const firstTab = await session.openTab(fixtures.titledURL(FIRST_TITLE));
 	await closeOtherPages(session, [firstTab]);
 	const secondTab = await session.openTab(fixtures.url("rich.html"));
@@ -120,7 +120,7 @@ export async function run({ session, fixtures, test }) {
 		}
 
 		await test("with a ZIP profile the archive is a plain ZIP file holding every tab", async () => {
-			await session.importSettings(ZIP_PROFILE);
+			await session.closeTab(await session.importSettings(ZIP_PROFILE));
 			const savedPath = await saveTabs(session, "save-unpinned-tabs-in-archive");
 			if (!savedPath.endsWith(".zip") || !basename(savedPath).startsWith(FIRST_TITLE)) {
 				return "unexpected name for the archive: " + basename(savedPath);
@@ -159,7 +159,7 @@ export async function run({ session, fixtures, test }) {
 		});
 
 		await test("a profile with a password is refused with an error, and nothing is saved", async () => {
-			await session.importSettings(PASSWORD_PROFILE);
+			await session.closeTab(await session.importSettings(PASSWORD_PROFILE));
 			await session.activate(thirdTab);
 			clearDownloads(session.downloadDir);
 			await session.dispatch("save-all-tabs-in-archive");
@@ -182,7 +182,7 @@ export async function run({ session, fixtures, test }) {
 		// page arrived once the archive was written, and was saved in a file of its own beside
 		// the archive. The editor tab is left out, like every tab that cannot be saved.
 		await test("the annotation editor tab is left out, and saves no file of its own", async () => {
-			await session.importSettings(ZIP_PROFILE);
+			await session.closeTab(await session.importSettings(ZIP_PROFILE));
 			await session.activate(firstTab);
 			await session.dispatch("edit-and-save-page");
 			const editorTab = await waitFor(async () => {
@@ -209,7 +209,7 @@ export async function run({ session, fixtures, test }) {
 			return content.includes(FOURTH_PAGE_PREFIX) ? "the editor tab was saved as a fourth page" : undefined;
 		});
 	} finally {
-		await session.importSettings(HTML_PROFILE);
+		await session.closeTab(await session.importSettings(HTML_PROFILE));
 		for (const context of openedTabs) {
 			await session.closeTab(context);
 		}

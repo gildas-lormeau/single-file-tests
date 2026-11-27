@@ -27,7 +27,7 @@ export const name = "archive";
 export const level = 2;
 
 export async function run({ session, fixtures, test }) {
-	await session.importSettings(ARCHIVE_PROFILE);
+	await session.closeTab(await session.importSettings(ARCHIVE_PROFILE));
 
 	// only set once the file really is an archive, so the publish step cannot pass vacuously
 	let archivePath;
@@ -56,7 +56,7 @@ export async function run({ session, fixtures, test }) {
 	});
 
 	await test("switching back to plain HTML stops producing archives", async () => {
-		await session.importSettings(PLAIN_PROFILE);
+		await session.closeTab(await session.importSettings(PLAIN_PROFILE));
 		const plainPath = await saveFixture(session, fixtures);
 		const head = readFileSync(plainPath).subarray(0, 120).toString("latin1");
 		return SFZ_PRELUDE.test(head) ? "still saving an archive after switching back" : undefined;

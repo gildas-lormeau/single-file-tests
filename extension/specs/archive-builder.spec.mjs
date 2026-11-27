@@ -83,7 +83,7 @@ export const name = "archive-builder";
 export const level = 3;
 
 export async function run({ session, fixtures, test }) {
-	await session.importSettings(HTML_PROFILE);
+	await session.closeTab(await session.importSettings(HTML_PROFILE));
 	const firstTab = await session.openTab(fixtures.titledURL(FIRST_TITLE));
 	const secondTab = await session.openTab(fixtures.titledURL(SECOND_TITLE));
 	const thirdTab = await session.openTab(fixtures.titledURL(THIRD_TITLE));
@@ -216,7 +216,7 @@ export async function run({ session, fixtures, test }) {
 			if (!archivePath) {
 				return "no archive was saved";
 			}
-			await session.importSettings(ZIP_PROFILE);
+			await session.closeTab(await session.importSettings(ZIP_PROFILE));
 			await openBuilder();
 			const expected = [RENAMED_TITLE, FIRST_TITLE, THIRD_TITLE].join("\n");
 			const titles = await rowTitles(expected);
@@ -249,7 +249,7 @@ export async function run({ session, fixtures, test }) {
 			if (!archivePath) {
 				return "no archive was saved";
 			}
-			await session.importSettings(FOREGROUND_PROFILE);
+			await session.closeTab(await session.importSettings(FOREGROUND_PROFILE));
 			await openBuilder();
 			await rowTitles([RENAMED_TITLE, FIRST_TITLE, THIRD_TITLE].join("\n"));
 			clearDownloads(session.downloadDir);
@@ -270,7 +270,7 @@ export async function run({ session, fixtures, test }) {
 			if (!pagesAdded) {
 				return "the first pages were not stored";
 			}
-			await session.importSettings(PASSWORD_PROFILE);
+			await session.closeTab(await session.importSettings(PASSWORD_PROFILE));
 			await openBuilder();
 			await rowTitles([RENAMED_TITLE, FIRST_TITLE, THIRD_TITLE].join("\n"));
 			clearDownloads(session.downloadDir);
@@ -309,7 +309,7 @@ export async function run({ session, fixtures, test }) {
 			if (!pagesAdded) {
 				return "the first pages were not stored";
 			}
-			await session.importSettings(HTML_PROFILE);
+			await session.closeTab(await session.importSettings(HTML_PROFILE));
 			const urls = [fixtures.titledURL(FIRST_URL_TITLE), fixtures.titledURL(SECOND_URL_TITLE)];
 			const batchTab = await session.openTab(session.singlefileURL(BATCH_PAGE));
 			openedTabs.push(batchTab);
@@ -356,7 +356,7 @@ export async function run({ session, fixtures, test }) {
 		// The same page is added twice, so every file of the second page is a duplicate.
 		await test("with the option, the files shared by the pages are stored only once", async () => {
 			await session.evaluate(builderTab, "browser.runtime.sendMessage({ method: \"archive.clear\" }).then(() => \"\")");
-			await session.importSettings(ZIP_PROFILE);
+			await session.closeTab(await session.importSettings(ZIP_PROFILE));
 			const richTab = await session.openTab(fixtures.url("rich.html"));
 			openedTabs.push(richTab);
 			const richTitle = await session.evaluate(richTab, "document.title");
@@ -401,7 +401,7 @@ export async function run({ session, fixtures, test }) {
 		// The pages added by the previous test are saved twice more, with and without the options.
 		await test("the table of contents, the marking of links and the transitions follow the options", async () => {
 			const saveArchive = async profile => {
-				await session.importSettings(profile);
+				await session.closeTab(await session.importSettings(profile));
 				await openBuilder();
 				await waitFor(() => session.evaluate(builderTab, ROW_TITLES), value => Boolean(value));
 				clearDownloads(session.downloadDir);
@@ -437,7 +437,7 @@ export async function run({ session, fixtures, test }) {
 		// save: it is the tab in front when the action is dispatched. The two pages added by the
 		// earlier tests are still in the list.
 		await test("a tab that cannot be saved is listed as not saved, and is left out of the archive", async () => {
-			await session.importSettings(ZIP_PROFILE);
+			await session.closeTab(await session.importSettings(ZIP_PROFILE));
 			await openBuilder();
 			const savedCount = Number(await waitFor(() => session.evaluate(builderTab, ROWS_COUNT), value => Number(value) > 0));
 			if (!savedCount) {
@@ -471,7 +471,7 @@ export async function run({ session, fixtures, test }) {
 		});
 	} finally {
 		await session.evaluate(builderTab, "browser.runtime.sendMessage({ method: \"archive.clear\" }).then(() => \"\")").catch(() => { });
-		await session.importSettings(HTML_PROFILE);
+		await session.closeTab(await session.importSettings(HTML_PROFILE));
 		for (const context of [...openedTabs, builderTab]) {
 			await session.closeTab(context);
 		}
