@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<title>Print fixture</title>
+	<style>
+		/* the navigation is for screens, the note is for paper */
+		@media screen {
+			#print-note {
+				display: none;
+			}
+		}
+
+		@media print {
+			#navigation {
+				display: none;
+			}
+		}
+	</style>
+</head>
+
+<body>
+	<nav id="navigation">navigation, hidden when the page is printed</nav>
+	<p id="article">article, displayed everywhere</p>
+	<p id="print-note">note, displayed only when the page is printed</p>
+</body>
+
+</html>
