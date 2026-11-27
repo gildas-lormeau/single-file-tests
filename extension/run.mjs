@@ -3,7 +3,8 @@
 // Runner for the functional extension suite. The browser matrix lives here so specs
 // never mention a browser: each spec receives a session and runs unchanged on both.
 //
-//   node extension/run.mjs                    both browsers, every spec
+//   node extension/run.mjs                    both browsers at the same time, every spec
+//   node extension/run.mjs --sequential       both browsers, one after the other
 //   node extension/run.mjs --browser=firefox  one browser
 //   node extension/run.mjs --spec=save-page   one spec
 //   node extension/run.mjs --shard=2/3        the second of three groups of specs
@@ -42,8 +43,23 @@ let known = 0;
 
 const fixtures = await startFixtureServer();
 try {
-	for (const browserName of browsers) {
-		await runBrowser(browserName);
+	if (browsers.length == 1 || options.sequential) {
+		for (const browserName of browsers) {
+			await runBrowser(browserName, console.log);
+		}
+	} else {
+		// The browsers share nothing but the fixture server, so they run together. The report
+		// of each one is kept and printed in one piece when it ends: lines of two browsers
+		// mixed together could not be read.
+		console.log("running " + browsers.join(" and ") + " at the same time, each report is printed when its browser ends");
+		await Promise.all(browsers.map(async browserName => {
+			const lines = [];
+			try {
+				await runBrowser(browserName, line => lines.push(line));
+			} finally {
+				console.log(lines.join("\n"));
+			}
+		}));
 	}
 } finally {
 	await fixtures.close();
@@ -52,31 +68,32 @@ console.log("\n" + (failures ? "FAILED" : "PASSED") + " (" + passes + " passed, 
 	+ (known ? ", " + known + " known" : "") + ")");
 process.exit(failures ? 1 : 0);
 
-async function runBrowser(browserName) {
-	console.log("\n=== " + browserName + " ===");
+async function runBrowser(browserName, log) {
+	const test = (label, body, testOptions) => runTest(log, label, body, testOptions);
+	log("\n=== " + browserName + " ===");
 	let session;
 	try {
 		session = await openSession(browserName, { headless: !options.headful, release: Boolean(options.release) });
 	} catch (error) {
 		failures++;
-		console.log("FAIL [" + browserName + "] could not open a session: " + error.message);
+		log("FAIL [" + browserName + "] could not open a session: " + error.message);
 		return;
 	}
 	// say which build was graded: a run that is going to gate a release is a record, and
 	// "it passed" means nothing without this line
-	console.log("   testing " + (session.releaseZip || session.extensionPath));
+	log("   testing " + (session.releaseZip || session.extensionPath));
 	if (session.releaseStaleness) {
-		console.log("   WARNING this package is stale: " + session.releaseStaleness);
+		log("   WARNING this package is stale: " + session.releaseStaleness);
 	}
 	try {
 		for (const specName of specNames) {
 			const spec = await import(new URL("./specs/" + specName, import.meta.url));
-			console.log("-- " + spec.name + " (level " + spec.level + ")");
+			log("-- " + spec.name + " (level " + spec.level + ")");
 			try {
 				await spec.run({ session, fixtures, test });
 			} catch (error) {
 				failures++;
-				console.log("FAIL [" + browserName + "] " + spec.name + " aborted: " + error.message);
+				log("FAIL [" + browserName + "] " + spec.name + " aborted: " + error.message);
 			}
 		}
 	} finally {
@@ -90,7 +107,7 @@ async function runBrowser(browserName) {
 // and documents the defect that stops it. Failing then reports KNOWN and does not make
 // the run red. Passing does, because a known failure that starts passing means the defect
 // is fixed and the marker is now lying about the code.
-async function test(label, body, { known: knownReason } = {}) {
+async function runTest(log, label, body, { known: knownReason } = {}) {
 	const started = Date.now();
 	let problem;
 	try {
@@ -101,17 +118,17 @@ async function test(label, body, { known: knownReason } = {}) {
 	const elapsed = Math.round((Date.now() - started) / 100) / 10 + "s";
 	if (problem && knownReason) {
 		known++;
-		console.log("  KNOWN " + label + " (" + elapsed + ")\n        " + problem + "\n        known: " + knownReason);
+		log("  KNOWN " + label + " (" + elapsed + ")\n        " + problem + "\n        known: " + knownReason);
 	} else if (problem) {
 		failures++;
-		console.log("  FAIL " + label + " (" + elapsed + ")\n        " + problem);
+		log("  FAIL " + label + " (" + elapsed + ")\n        " + problem);
 	} else if (knownReason) {
 		failures++;
-		console.log("  FAIL " + label + " (" + elapsed + ")\n        this is marked known but passed; drop the marker: "
+		log("  FAIL " + label + " (" + elapsed + ")\n        this is marked known but passed; drop the marker: "
 			+ knownReason);
 	} else {
 		passes++;
-		console.log("  PASS " + label + " (" + elapsed + ")");
+		log("  PASS " + label + " (" + elapsed + ")");
 	}
 }
 

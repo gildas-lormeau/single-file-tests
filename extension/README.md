@@ -4,13 +4,18 @@ Black-box tests for the SingleFile extension on Chromium and Firefox. They ask t
 extension to do something the way a user would, then check the file it wrote.
 
 ```
-npm run test-extension                       both browsers, every spec
+npm run test-extension                       both browsers at the same time, every spec
+node extension/run.mjs --sequential          both browsers, one after the other
 npm run test-extension-firefox               one browser
 node extension/run.mjs --spec=save-page      one spec
 node extension/run.mjs --shard=2/3           the second of three groups of specs
 node extension/run.mjs --headful             watch it happen
 npm run test-release                         the packaged builds, then the format suite
 ```
+
+With two browsers the runner drives them at the same time: they share nothing but the fixture
+server. The report of each browser is printed in one piece when that browser ends, so nothing
+shows while the specs run. `--sequential` runs them one after the other and prints as it goes.
 
 `--shard=i/n` splits the specs into `n` groups of similar length and runs group `i`. The
 CI workflows of the two extensions start one job per group to shorten the run. The split
