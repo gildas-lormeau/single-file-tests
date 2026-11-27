@@ -2,8 +2,8 @@
 // per-browser differences are confined to launch-chromium.mjs / launch-firefox.mjs and
 // to how the installed extension's origin is derived.
 
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { launchChromium } from "./launch-chromium.mjs";
@@ -55,11 +55,23 @@ const PRIVILEGED_SCOPE_REFUSAL = /privileged scope/;
 
 // `release` tests the zip build-extension.sh produces instead of the working tree; see
 // release-build.mjs for why the two are not the same thing.
-async function openSession(browserName, { headless = true, release = false } = {}) {
+//
+// `grantedPermissions` names optional permissions of the extension that the session starts
+// with. Granting one takes a click on a button of the options page and then, in Chromium, a
+// click in a dialog of the browser itself, which nothing here can reach; Firefox refuses the
+// request unless it comes from real input, which it does not accept on an extension page
+// (see PRIVILEGED_SCOPE_REFUSAL). So the extension is installed from a copy whose manifest
+// requires these permissions. Everything behind the permission is then tested for real; the
+// request itself is not, and a spec that relies on this should say so.
+async function openSession(browserName, { headless = true, release = false, grantedPermissions = [] } = {}) {
 	const releaseBuild = release ? unpackRelease(browserName, REPO_ROOT) : undefined;
-	const extensionPath = releaseBuild ? releaseBuild.path : EXTENSION_PATHS[browserName];
-	let singlefileId, downloadDir, bridge, relayPath, browser;
+	const sourcePath = releaseBuild ? releaseBuild.path : EXTENSION_PATHS[browserName];
+	let extensionPath = sourcePath;
+	let singlefileId, downloadDir, bridge, relayPath, browser, grantedPath;
 	try {
+		if (grantedPermissions.length) {
+			grantedPath = extensionPath = grantPermissions(sourcePath, grantedPermissions);
+		}
 		singlefileId = readGeckoId(extensionPath);
 		downloadDir = mkdtempSync(join(tmpdir(), "sf-fn-dl-"));
 		guardDirectory(downloadDir);
@@ -74,7 +86,7 @@ async function openSession(browserName, { headless = true, release = false } = {
 		if (bridge) {
 			await bridge.close();
 		}
-		[relayPath, downloadDir].forEach(path => path && releaseDirectory(path));
+		[relayPath, downloadDir, grantedPath].forEach(path => path && releaseDirectory(path));
 		if (releaseBuild) {
 			releaseBuild.dispose();
 		}
@@ -98,7 +110,9 @@ async function openSession(browserName, { headless = true, release = false } = {
 			session,
 			downloadDir,
 			// what was actually installed, so a run can say which build it graded
-			extensionPath,
+			extensionPath: sourcePath,
+			// another browser running the same build, with optional permissions already granted
+			openVariant: options => openSession(browserName, { headless, release, ...options }),
 			releaseZip: releaseBuild && releaseBuild.zipPath,
 			releaseStaleness: releaseBuild && releaseBuild.staleness,
 			singlefileId: singlefile.extension,
@@ -386,6 +400,10 @@ async function openSession(browserName, { headless = true, release = false } = {
 		await bridge.close();
 		releaseDirectory(relayPath);
 		releaseDirectory(downloadDir);
+		// a copy of the release carries the injected Woleet key as the release does
+		if (grantedPath) {
+			releaseDirectory(grantedPath);
+		}
 		// the unpacked release carries the injected Woleet key, so it does not outlive the run
 		if (releaseBuild) {
 			releaseBuild.dispose();
@@ -397,4 +415,23 @@ function readGeckoId(extensionPath) {
 	const manifest = JSON.parse(readFileSync(join(extensionPath, "manifest.json"), "utf8"));
 	const settings = manifest.browser_specific_settings || manifest.applications;
 	return settings && settings.gecko && settings.gecko.id;
+}
+
+// A copy of the extension whose manifest requires the given optional permissions. The
+// dependencies and the history of a working tree are left out: the browser loads neither.
+function grantPermissions(extensionPath, permissions) {
+	const grantedPath = mkdtempSync(join(tmpdir(), "sf-fn-granted-"));
+	guardDirectory(grantedPath);
+	cpSync(extensionPath, grantedPath, { recursive: true, filter: source => !["node_modules", ".git"].includes(basename(source)) });
+	const manifestPath = join(grantedPath, "manifest.json");
+	const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+	const missing = permissions.filter(permission => !(manifest.optional_permissions || []).includes(permission));
+	if (missing.length) {
+		releaseDirectory(grantedPath);
+		throw new Error("not an optional permission of " + extensionPath + ": " + missing.join(", "));
+	}
+	manifest.optional_permissions = manifest.optional_permissions.filter(permission => !permissions.includes(permission));
+	manifest.permissions = [...manifest.permissions, ...permissions];
+	writeFileSync(manifestPath, JSON.stringify(manifest, null, "\t"));
+	return grantedPath;
 }

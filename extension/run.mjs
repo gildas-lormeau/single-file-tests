@@ -26,6 +26,7 @@ const SPEC_WEIGHTS = {
 	"autosave": 120,
 	"archive-builder": 64,
 	"pending-pause": 60,
+	"autosave-tabs": 55,
 	"autosave-navigation": 44,
 	"tabs-archive": 41,
 	"options": 34,
