@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<title>Editor resources fixture</title>
+	<link rel="stylesheet" href="simple.css">
+	<style>
+		/* a stylesheet used as an image by mistake, as some real pages do: the archive then
+		   holds an image entry whose name ends with ".css" */
+		#box {
+			width: 32px;
+			height: 32px;
+			background-image: url(rich.css);
+		}
+	</style>
+</head>
+
+<body>
+	<h1 id="marker">EDITOR_RESOURCES_MARKER</h1>
+	<p class="styled">This paragraph is styled by an external stylesheet.</p>
+	<div id="box"></div>
+	<img id="logo" src="logo.svg" alt="fixture logo" width="64" height="64">
+</body>
+
+</html>
