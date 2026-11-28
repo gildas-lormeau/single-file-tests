@@ -39,6 +39,7 @@ const ERROR_BAR_TEXT = `(() => { const bar = document.querySelector("${ERROR_BAR
 const SAVED_PAGE_SCHEMES = ["http://", "file://"];
 const EDITOR_PAGE = "editor.html";
 const OPTIONS_PAGE = "options.html";
+const OPTIONS_PAGE_PATH = "src/ui/pages/" + OPTIONS_PAGE;
 const FAILURE_TEXT = "could not be saved in the archive";
 const EDITOR_SETTLE_DELAY = 4000;
 
@@ -50,8 +51,11 @@ export async function run({ session, fixtures, test }) {
 	const firstTab = await session.openTab(fixtures.titledURL(FIRST_TITLE));
 	await closeOtherPages(session, [firstTab]);
 	const secondTab = await session.openTab(fixtures.url("rich.html"));
+	// a tab SingleFile cannot save, which "all tabs" includes: the spec opens its own, it used
+	// to count on the one an earlier spec had left open, and failed when run after other specs
+	const optionsTab = await session.openTab(session.singlefileURL(OPTIONS_PAGE_PATH));
 	const thirdTab = await session.openTab(fixtures.titledURL(THIRD_TITLE));
-	const openedTabs = [firstTab, secondTab, thirdTab];
+	const openedTabs = [firstTab, secondTab, optionsTab, thirdTab];
 
 	try {
 		// only set once a single file was written, so the next tests cannot pass vacuously
@@ -71,9 +75,8 @@ export async function run({ session, fixtures, test }) {
 			return undefined;
 		});
 
-		// importing the settings left the options page open, and it is a tab like the others
-		// for "all tabs": it cannot be saved, and the user is told so in the tab in front, which
-		// is the last one that was opened
+		// the options page is a tab like the others for "all tabs": it cannot be saved, and the
+		// user is told so in the tab in front, which is the last one that was opened
 		await test("the tabs that could not be saved are listed in an error message", async () => {
 			if (!archivePath) {
 				return "no archive was saved";
