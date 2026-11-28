@@ -12,6 +12,11 @@ import { waitForDownload, clearDownloads, readSavedPage } from "../expect/saved-
 
 const MARKER_TEXT = "FUNCTIONAL_FIXTURE_MARKER";
 const PROMPT_MARKER = "externalCaptureRequestId";
+// The tab has the URL of the prompt before its page has asked the extension for the request. The
+// buttons are in a block that stays hidden until then, and the browser refuses to click on an
+// element that is not displayed ("no such element: Origin element ... was not found", seen now and
+// then on the runners). The prompt is ready once its page displays the request.
+const PROMPT_DISPLAYED = "(() => { const request = document.querySelector(\"#externalCapturePendingRequest\"); return Boolean(request) && !request.hidden; })()";
 const OPTIONS_VIEWPORT = { width: 1200, height: 4000 };
 const REFUSAL_MESSAGE = "SingleFile capture was not approved for this extension";
 // Until the polyfill grew a catch, Chromium answered a refusal by never answering at all,
@@ -115,7 +120,14 @@ async function waitForPrompt(session, { timeout = 15000 } = {}) {
 		const { contexts } = await session.session.send("browsingContext.getTree", {});
 		const found = contexts.find(node => node.url && node.url.includes(PROMPT_MARKER));
 		if (found) {
-			return found.context;
+			try {
+				if (await session.evaluate(found.context, PROMPT_DISPLAYED)) {
+					return found.context;
+				}
+				// eslint-disable-next-line no-unused-vars
+			} catch (error) {
+				// the page of the tab is still loading, it is asked again
+			}
 		}
 		await new Promise(resolve => setTimeout(resolve, 250));
 	}

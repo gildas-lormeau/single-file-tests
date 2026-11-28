@@ -7,6 +7,11 @@
 
 const CAPTURE_TIMEOUT = 60000;
 const PROMPT_MARKER = "externalCaptureRequestId";
+// The tab has the URL of the prompt before its page has asked the extension for the request. The
+// buttons are in a block that stays hidden until then, and the browser refuses to click on an
+// element that is not displayed ("no such element: Origin element ... was not found", seen now and
+// then on the runners). The prompt is ready once its page displays the request.
+const PROMPT_DISPLAYED = "(() => { const request = document.querySelector(\"#externalCapturePendingRequest\"); return Boolean(request) && !request.hidden; })()";
 const OPTIONS_VIEWPORT = { width: 1200, height: 4000 };
 const SFZ_PRELUDE = /<html data-sfz>/;
 const MARKER_TEXT = "FUNCTIONAL_FIXTURE_MARKER";
@@ -18,8 +23,10 @@ export const level = 2;
 export async function run({ session, fixtures, test }) {
 	await test("an unapproved caller is asked for permission", async () => {
 		await session.openTab(fixtures.url("simple.html"));
-		// The call blocks until someone answers the prompt, so do not await it yet
-		const capturing = capture(session, {});
+		// The call blocks until someone answers the prompt, so do not await it yet. Its failure is
+		// turned into a value at once: a test that stops before awaiting it would leave a rejection
+		// nobody handles, which ends the whole run and the specs that follow with it.
+		const capturing = capture(session, {}).catch(error => ({ error: error.message }));
 		const promptContext = await waitForPrompt(session);
 		if (!promptContext) {
 			return "no approval prompt appeared for an unknown caller";
@@ -28,7 +35,7 @@ export async function run({ session, fixtures, test }) {
 		await session.click(promptContext, "#externalCaptureApproveButton");
 		// Approving leaves the options page as the active tab. The capture that raised the
 		// prompt must still return the page the caller asked about, not the prompt.
-		const captured = await capturing.catch(error => ({ error: error.message }));
+		const captured = await capturing;
 		// the prompt tab stays open on approval, and a stale one would look like a new
 		// prompt to the test below
 		await session.closeTab(promptContext);
@@ -55,9 +62,9 @@ export async function run({ session, fixtures, test }) {
 
 	await test("approving once is enough, the prompt does not come back", async () => {
 		await session.openTab(fixtures.url("simple.html"));
-		const capturing = capture(session, {});
+		const capturing = capture(session, {}).catch(error => ({ error: error.message }));
 		const promptContext = await waitForPrompt(session, { timeout: 4000 });
-		const captured = await capturing.catch(error => ({ error: error.message }));
+		const captured = await capturing;
 		if (promptContext) {
 			return "a second prompt appeared for an already approved caller";
 		}
@@ -112,7 +119,14 @@ async function waitForPrompt(session, { timeout = 15000 } = {}) {
 		const { contexts } = await session.session.send("browsingContext.getTree", {});
 		const found = contexts.find(node => node.url && node.url.includes(PROMPT_MARKER));
 		if (found) {
-			return found.context;
+			try {
+				if (await session.evaluate(found.context, PROMPT_DISPLAYED)) {
+					return found.context;
+				}
+				// eslint-disable-next-line no-unused-vars
+			} catch (error) {
+				// the page of the tab is still loading, it is asked again
+			}
 		}
 		await new Promise(resolve => setTimeout(resolve, 250));
 	}
