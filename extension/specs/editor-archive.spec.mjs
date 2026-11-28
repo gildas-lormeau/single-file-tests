@@ -20,7 +20,11 @@ const EDITOR_PAGE = "editor.html";
 const ZIP_SIGNATURE = "PK";
 const STYLESHEET_IMAGE_ENTRY = /images\/\d+\.css/;
 const PAGE_ENTRY = "index.html";
-const SAVE_BUTTON_READY = "(() => { const button = document.querySelector(\".save-page-button\"); return Boolean(button) && !button.hidden; })()";
+// The save button is in the editor page from the start, and pressing it before the page arrived
+// saves nothing, silently. The editor replaces its "Please wait..." title with this prefix followed
+// by the title of the page once the page is displayed and can be saved.
+const EDITOR_TITLE_PREFIX = "[SingleFile] ";
+const EDITOR_READY = "document.title.startsWith(" + JSON.stringify(EDITOR_TITLE_PREFIX) + ")";
 // the button listens to "mouseup", which a synthetic click does not send
 const PRESS_SAVE_BUTTON = "document.querySelector(\".save-page-button\").dispatchEvent(new MouseEvent(\"mouseup\", { bubbles: true }))";
 const ERROR_BAR_TEXT = "(() => { const bar = document.querySelector(\"singlefile-error-bar\"); return bar && bar.shadowRoot ? bar.shadowRoot.textContent : \"\"; })()";
@@ -39,17 +43,25 @@ export async function run({ session, fixtures, test }) {
 		await test("the editor saves a ZIP file holding an image entry named like a stylesheet", async () => {
 			clearDownloads(session.downloadDir);
 			await session.dispatch("edit-and-save-page");
+			// The editor tab is looked for again at each attempt: while its page loads, the tab found
+			// by its URL may have no document to evaluate a script in yet, which is one more way of
+			// not being ready. The last refusal is reported if the editor never gets ready.
+			let lastError;
 			const editorTab = await waitFor(async () => {
 				const { contexts } = await session.session.send("browsingContext.getTree", { maxDepth: 0 });
-				return contexts.find(({ url }) => url.includes(EDITOR_PAGE));
+				const tab = contexts.find(({ url }) => url.includes(EDITOR_PAGE));
+				if (tab && !openedTabs.includes(tab.context)) {
+					openedTabs.push(tab.context);
+				}
+				try {
+					return tab && await session.evaluate(tab.context, EDITOR_READY) ? tab : undefined;
+				} catch (error) {
+					lastError = error;
+					return undefined;
+				}
 			}, Boolean);
 			if (!editorTab) {
-				return "the annotation editor did not open";
-			}
-			openedTabs.push(editorTab.context);
-			// the save button is shown once the editor has received and displayed the page
-			if (!await waitFor(() => session.evaluate(editorTab.context, SAVE_BUTTON_READY), Boolean)) {
-				return "the editor did not display the page";
+				return "the annotation editor did not display the page" + (lastError ? " (" + lastError.message + ")" : "");
 			}
 			await session.evaluate(editorTab.context, PRESS_SAVE_BUTTON);
 			let savedPath;
