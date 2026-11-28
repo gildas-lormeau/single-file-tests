@@ -43,6 +43,10 @@ async function launchFirefox({ singlefileId, downloadDir, headless = true }) {
 		prefLine("browser.shell.checkDefaultBrowser", false),
 		prefLine("datareporting.policy.dataSubmissionEnabled", false),
 		prefLine("toolkit.telemetry.enabled", false),
+		// Firefox asks the user to allow each extension into the pages opened from the disk, in the
+		// permissions of the extension (about:addons), and nothing here can reach that page. The
+		// specs saving such a page run as for a user who allowed it
+		prefLine("extensions.webextensions.fileSchemeAccess.requireOptIn", false),
 		""
 	].join("\n"));
 
