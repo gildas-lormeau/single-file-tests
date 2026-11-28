@@ -31,7 +31,8 @@ const SPEC_WEIGHTS = {
 	"tabs-archive": 41,
 	"options": 34,
 	"filename": 20,
-	"autosave-discard": 18
+	"autosave-discard": 18,
+	"undated-archive": 17
 };
 const DEFAULT_SPEC_WEIGHT = 8;
 
