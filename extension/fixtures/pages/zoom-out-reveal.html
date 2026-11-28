@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<title>Zoom out fixture</title>
+	<style>
+		body {
+			margin: 0;
+		}
+
+		.block {
+			height: 1500px;
+		}
+
+		.revealed-on-scroll {
+			height: 200px;
+		}
+	</style>
+</head>
+
+<body>
+	<div id="first" class="revealed-on-scroll">ZOOM_OUT_FIRST_BLOCK</div>
+	<div class="block"></div>
+	<div class="block"></div>
+	<div class="block"></div>
+	<div class="block"></div>
+	<div id="last" class="revealed-on-scroll">ZOOM_OUT_LAST_BLOCK</div>
+	<script>
+		// What the scripts revealing content on scroll do: a block is revealed once its rectangle is
+		// entirely inside the viewport. The last block sits five screens below the top and the page is
+		// never scrolled, so only a page zoomed out by SingleFile reveals it. The saved page keeps
+		// the attribute and drops the script.
+		const blocks = Array.from(document.querySelectorAll(".revealed-on-scroll"));
+		addEventListener("scroll", reveal);
+		addEventListener("resize", reveal);
+		reveal();
+
+		function reveal() {
+			blocks.forEach(block => {
+				const rect = block.getBoundingClientRect();
+				if (rect.top >= 0 && rect.bottom <= innerHeight) {
+					block.dataset.revealed = "yes";
+				}
+			});
+		}
+	</script>
+</body>
+
+</html>
